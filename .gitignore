@@ -1,0 +1,13 @@
+.env
+apikey.txt
+.venv/
+.venv-python39/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.style_cache/
+output/
+~$*.xlsx
+runtime/
+web/

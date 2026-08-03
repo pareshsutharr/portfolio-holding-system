@@ -1,0 +1,75 @@
+{
+  "universe": {
+    "min_pct_rank_observations": 10
+  },
+  "history": {
+    "low_vol_years": 3,
+    "momentum_months": 12,
+    "dma_window": 200,
+    "trading_days_per_year": 252,
+    "minimum_return_observations": 60
+  },
+  "styles": {
+    "growth": {
+      "label": "Growth",
+      "definition": "A company showing sustained earnings and business growth.",
+      "min_pass": 4,
+      "metrics": [
+        {"key": "revenue_cagr5", "label": "Revenue Growth (5Y CAGR)", "weight": 0.20, "direction": "higher_better", "threshold_type": "fixed", "threshold": 0.10, "compare": ">=", "format": "percent"},
+        {"key": "pat_cagr5", "label": "PAT Growth (5Y CAGR)", "weight": 0.20, "direction": "higher_better", "threshold_type": "fixed", "threshold": 0.10, "compare": ">=", "format": "percent"},
+        {"key": "eps_cagr5", "label": "EPS Growth (5Y CAGR)", "weight": 0.20, "direction": "higher_better", "threshold_type": "fixed", "threshold": 0.10, "compare": ">=", "format": "percent"},
+        {"key": "roe_avg5", "label": "ROE (5Y Avg)", "weight": 0.20, "direction": "higher_better", "threshold_type": "fixed", "threshold": 0.15, "compare": ">=", "format": "percent"},
+        {"key": "roce_avg5", "label": "ROCE (5Y Avg)", "weight": 0.20, "direction": "higher_better", "threshold_type": "fixed", "threshold": 0.15, "compare": ">=", "format": "percent"}
+      ]
+    },
+    "value": {
+      "label": "Value",
+      "definition": "A fundamentally attractive company trading at reasonable valuation.",
+      "min_pass": 3,
+      "metrics": [
+        {"key": "pe", "label": "P/E", "weight": 0.25, "direction": "lower_better", "threshold_type": "median", "compare": "<", "format": "ratio"},
+        {"key": "pb", "label": "P/B", "weight": 0.25, "direction": "lower_better", "threshold_type": "median", "compare": "<", "format": "ratio"},
+        {"key": "ev_ebitda", "label": "EV/EBITDA", "weight": 0.25, "direction": "lower_better", "threshold_type": "median", "compare": "<", "format": "ratio"},
+        {"key": "div_yield", "label": "Dividend Yield", "weight": 0.25, "direction": "higher_better", "threshold_type": "median", "compare": ">", "format": "percent"}
+      ]
+    },
+    "momentum": {
+      "label": "Momentum",
+      "definition": "A stock exhibiting sustained positive price trend.",
+      "min_pass": 3,
+      "metrics": [
+        {"key": "return_6m", "label": "6 Month Return", "weight": 0.25, "direction": "higher_better", "threshold_type": "fixed", "threshold": 0.0, "compare": ">", "format": "percent"},
+        {"key": "return_12m", "label": "12 Month Return", "weight": 0.25, "direction": "higher_better", "threshold_type": "fixed", "threshold": 0.0, "compare": ">", "format": "percent"},
+        {"key": "relative_strength", "label": "Relative Strength vs Nifty", "weight": 0.25, "direction": "higher_better", "threshold_type": "fixed", "threshold": 1.0, "compare": ">", "format": "ratio"},
+        {"key": "above_200dma", "label": "Price > 200 DMA", "weight": 0.25, "direction": "boolean", "threshold_type": "fixed", "threshold": 1.0, "compare": "==", "format": "boolean"}
+      ]
+    },
+    "quality": {
+      "label": "Quality",
+      "definition": "A financially strong business with efficient capital allocation.",
+      "min_pass": 3,
+      "metrics": [
+        {"key": "roe_latest", "label": "ROE", "weight": 0.25, "direction": "higher_better", "threshold_type": "fixed", "threshold": 0.15, "compare": ">=", "format": "percent"},
+        {"key": "roce_latest", "label": "ROCE", "weight": 0.25, "direction": "higher_better", "threshold_type": "fixed", "threshold": 0.15, "compare": ">=", "format": "percent"},
+        {"key": "debt_equity_latest", "label": "Debt/Equity", "weight": 0.25, "direction": "lower_better", "threshold_type": "fixed", "threshold": 0.50, "compare": "<=", "format": "ratio"},
+        {"key": "interest_cover_latest", "label": "Interest Coverage", "weight": 0.25, "direction": "higher_better", "threshold_type": "fixed", "threshold": 5.0, "compare": ">=", "format": "ratio"}
+      ]
+    }
+  },
+  "size": {
+    "label": "Size",
+    "definition": "Classification by market capitalization.",
+    "large_cap_label": "Large Cap",
+    "mid_cap_label": "Mid Cap",
+    "small_cap_label": "Small Cap"
+  },
+  "rating_bands": [
+    {"min": 90, "rating": "Exceptional"},
+    {"min": 80, "rating": "Very Strong"},
+    {"min": 70, "rating": "Strong"},
+    {"min": 60, "rating": "Moderate"},
+    {"min": 50, "rating": "Average"},
+    {"min": 40, "rating": "Weak"},
+    {"min": 0, "rating": "Very Weak"}
+  ]
+}

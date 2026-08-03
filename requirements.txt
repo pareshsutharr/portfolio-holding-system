@@ -1,0 +1,16 @@
+pandas
+pyarrow<22
+openpyxl
+google-genai
+matplotlib
+numpy
+reportlab
+requests
+pdfplumber
+SQLAlchemy>=2.0,<3.0
+psycopg[binary]>=3.2,<4.0
+python-dotenv>=1.0,<2.0
+yfinance>=0.2.54,<1.0
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34,<1.0
+python-multipart>=0.0.20,<1.0

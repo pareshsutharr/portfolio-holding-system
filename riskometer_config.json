@@ -1,0 +1,68 @@
+{
+  "module_weights": {
+    "concentration": 0.15,
+    "sector": 0.15,
+    "market_cap": 0.10,
+    "quality": 0.15,
+    "liquidity": 0.10,
+    "volatility": 0.20,
+    "beta": 0.15
+  },
+  "risk_levels": [
+    {"max": 20, "label": "Very Low"},
+    {"max": 40, "label": "Low"},
+    {"max": 60, "label": "Moderate"},
+    {"max": 80, "label": "High"},
+    {"max": 100, "label": "Very High"}
+  ],
+  "concentration": {
+    "largest_holding_high": 40,
+    "top3_high": 70,
+    "top5_high": 85,
+    "hhi_high": 0.25
+  },  
+  "sector": {
+    "largest_sector_high": 50,
+    "sector_hhi_high": 0.30,
+    "well_diversified_sector_count": 10
+  },
+  "market_cap_scores": {
+    "Large Cap": 15,
+    "Mid Cap": 45,
+    "Small Cap": 75,
+    "Micro Cap": 95,
+    "Unknown": 80
+  },
+  "quality": {
+    "roe_good": 20,
+    "roce_good": 20,
+    "debt_equity_high": 2,
+    "interest_cover_good": 8
+  },
+  "liquidity": {
+    "Large Cap": {"volume_low_thousand": 50, "volume_high_thousand": 2000, "turnover_low_crore": 5, "turnover_high_crore": 200},
+    "Mid Cap": {"volume_low_thousand": 20, "volume_high_thousand": 800, "turnover_low_crore": 2, "turnover_high_crore": 80},
+    "Small Cap": {"volume_low_thousand": 5, "volume_high_thousand": 300, "turnover_low_crore": 0.5, "turnover_high_crore": 30}
+  },
+  "liquidity_fallback_tier": "Small Cap",
+  "volatility": {
+    "annualized_volatility_high": 0.60,
+    "maximum_drawdown_high": 0.50,
+    "downside_volatility_high": 0.45
+  },
+  "beta": {
+    "low": 0.60,
+    "high": 1.60,
+    "benchmark_by_cap": {
+      "Large Cap": "Nifty 50",
+      "Mid Cap": "Nifty Midcap 150",
+      "Small Cap": "Nifty 500"
+    },
+    "benchmark_fallback": "Nifty 500"
+  },
+  "history": {
+    "trading_days": 252,
+    "liquidity_days": 63,
+    "minimum_return_observations": 60
+  }
+}

@@ -1,0 +1,1 @@
+In our portfolio analyzer we already have risk-o-meter , now we are going to add code to study the quality of the portfolio for which I am having data . 

@@ -1,0 +1,16 @@
+{
+  "name": "portfolio-analyzer",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "postinstall": "npm --prefix web install --no-audit",
+    "dev": "./run_web.sh",
+    "stop": "./stop_web.sh",
+    "restart": "npm run stop && npm run dev",
+    "build": "npm --prefix web run build",
+    "lint": "npm --prefix web run lint",
+    "test": ".venv/bin/python -m pytest -q && npm --prefix web run lint",
+    "api": ".venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000",
+    "web": "npm --prefix web run dev -- --port 3001"
+  }
+}

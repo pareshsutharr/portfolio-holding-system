@@ -1,0 +1,11 @@
+Here are the four, each as a one-line thesis plus what it actually measures:
+
+Growth — the business is expanding fast. You're buying the rate of increase in earnings, revenue and profit. Measured by trailing CAGR of EPS/revenue/net profit (and high ROE/ROCE as evidence it can keep growing). Answers: is this company getting bigger, quickly?
+
+Value — the stock is cheap relative to what the business is worth. You're paying a low price per unit of earnings, book, or cash flow. Measured by low P/E, P/B, EV/EBITDA and high dividend yield. Answers: am I paying little for what I get?
+
+Momentum — the price is trending up and likely to continue. Purely about price behaviour, not the company. Measured by strong 6–12 month returns and outperformance vs the index. Answers: has this been winning lately?
+
+Quality — the business is financially strong and well-run. Efficient, profitable, low debt, comfortably services its obligations. Measured by high ROE/ROCE, low Debt/Equity, high interest coverage. Answers: is this a good business, regardless of price?
+
+The one distinction worth holding onto: Value and Momentum are about the stock (price — cheap? rising?), while Growth and Quality are about the company (fundamentals — expanding? well-run?). That's why they pair up naturally — Value+Quality ("good business, fair price") and Growth+Momentum ("expanding business the market is chasing") are the two classic combinations.

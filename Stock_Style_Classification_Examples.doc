@@ -1,0 +1,118 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<!--[if gte mso 9]>
+<xml>
+<w:WordDocument>
+<w:View>Print</w:View>
+<w:Zoom>100</w:Zoom>
+</w:WordDocument>
+</xml>
+<![endif]-->
+<title>Stock Style Classification - Worked Examples</title>
+<style>
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1F2937; }
+  h1 { font-size: 20pt; color: #0F172A; margin-bottom: 4px; }
+  h2 { font-size: 15pt; color: #1D4ED8; margin-top: 24px; margin-bottom: 6px; }
+  h3 { font-size: 12.5pt; color: #0F172A; margin-top: 16px; margin-bottom: 4px; }
+  p { line-height: 1.4; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 14px 0; }
+  th { background-color: #0F172A; color: #FFFFFF; text-align: left; padding: 6px 8px; font-size: 10pt; }
+  td { border: 1px solid #D9E2EC; padding: 6px 8px; font-size: 10pt; }
+  tr.alt { background-color: #F8FAFC; }
+  .pass { color: #16A34A; font-weight: bold; }
+  .fail { color: #DC2626; font-weight: bold; }
+  .note { background-color: #FFF7ED; border-left: 4px solid #F58220; padding: 10px 14px; margin: 14px 0; }
+  .caption { font-size: 9.5pt; color: #64748B; margin-top: -6px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Stock Style Classification &ndash; Worked Examples</h1>
+<p class="caption">How Primary Style, Secondary Style and Rating are derived for individual holdings, per Stock_Style_Rating_and_Scoring_Methodology_v1.docx.</p>
+
+<h2>Method summary</h2>
+<p>Every holding is evaluated against six competing styles &mdash; Growth, Value, Momentum, Quality, Low Volatility and Liquidity &mdash; using two layers per metric:</p>
+<p><b>1. Score (0&ndash;100):</b> the stock&rsquo;s raw metric value is converted to a percentile rank against the full Accord market universe (~7,000 listed companies), direction-aware (a low P/E scores high, a high ROE scores high). The Style Score is the weighted average of its metric scores.</p>
+<p><b>2. Eligibility (pass/fail):</b> each metric is separately checked against its literal minimum requirement from the methodology doc (e.g. ROE &ge; 15%, P/E below market median, Beta &lt; 1). A style is only &ldquo;eligible&rdquo; if the stock clears its stated bar (e.g. Growth needs 4 of 5 metrics to pass). An ineligible style still shows a score, but can never win Primary or Secondary.</p>
+<p><b>Primary Style</b> = highest score among only the <i>eligible</i> styles. <b>Secondary Style</b> = second-highest eligible score. <b>Rating</b> = the Primary Style&rsquo;s score looked up against the Final Rating Bands (90+ Exceptional, 80&ndash;89 Very Strong, 70&ndash;79 Strong, 60&ndash;69 Moderate, 50&ndash;59 Average, 40&ndash;49 Weak, below 40 Very Weak). <b>Size</b> (Large/Mid/Small Cap) is a separate classification and does not compete for Primary/Secondary.</p>
+
+<h2>Example 1: Aaron Industries Ltd. (INE721Z01010)</h2>
+<h3>Growth &mdash; eligible (5 of 5 pass) &mdash; Style Score 79.8</h3>
+<table>
+<tr><th>Metric</th><th>Raw Value</th><th>Score</th><th>Requirement</th><th>Pass?</th></tr>
+<tr><td>Revenue Growth (5Y CAGR)</td><td>29.5%</td><td>83.5</td><td>&ge; 10%</td><td class="pass">Yes</td></tr>
+<tr class="alt"><td>PAT Growth (5Y CAGR)</td><td>43.7%</td><td>71.0</td><td>&ge; 10%</td><td class="pass">Yes</td></tr>
+<tr><td>EPS Growth (5Y CAGR)</td><td>42.5%</td><td>74.7</td><td>&ge; 10%</td><td class="pass">Yes</td></tr>
+<tr class="alt"><td>ROE (5Y Avg)</td><td>23.3%</td><td>87.2</td><td>&ge; 15%</td><td class="pass">Yes</td></tr>
+<tr><td>ROCE (5Y Avg)</td><td>22.2%</td><td>82.7</td><td>&ge; 15%</td><td class="pass">Yes</td></tr>
+</table>
+<p>Its other eligible style, Low Volatility, scored 62.4 &mdash; lower than Growth.</p>
+<p><b>Result: Primary Style = Growth (79.8) &rarr; Rating: Strong. Secondary Style = Low Volatility (62.4).</b></p>
+
+<h2>Example 2: ICICI Bank Ltd. (INE090A01021)</h2>
+
+<h3>Growth &mdash; eligible (5 of 5 pass) &mdash; Style Score 64.4</h3>
+<table>
+<tr><th>Metric</th><th>Raw Value</th><th>Score</th><th>Requirement</th><th>Pass?</th></tr>
+<tr><td>Revenue Growth (5Y CAGR)</td><td>17.0%</td><td>65.5</td><td>&ge; 10%</td><td class="pass">Yes</td></tr>
+<tr class="alt"><td>PAT Growth (5Y CAGR)</td><td>23.3%</td><td>50.9</td><td>&ge; 10%</td><td class="pass">Yes</td></tr>
+<tr><td>EPS Growth (5Y CAGR)</td><td>23.3%</td><td>56.0</td><td>&ge; 10%</td><td class="pass">Yes</td></tr>
+<tr class="alt"><td>ROE (5Y Avg)</td><td>17.9%</td><td>78.9</td><td>&ge; 15%</td><td class="pass">Yes</td></tr>
+<tr><td>ROCE (5Y Avg)</td><td>16.1%</td><td>70.8</td><td>&ge; 15%</td><td class="pass">Yes</td></tr>
+</table>
+
+<h3>Value &mdash; NOT eligible (2 of 4 pass, needs 3) &mdash; Style Score 59.9</h3>
+<table>
+<tr><th>Metric</th><th>Raw Value</th><th>Score</th><th>Requirement</th><th>Pass?</th></tr>
+<tr><td>P/E</td><td>15.9</td><td>68.7</td><td>&lt; market median</td><td class="pass">Yes</td></tr>
+<tr class="alt"><td>P/B</td><td>2.42</td><td>41.0</td><td>&lt; market median</td><td class="fail">No</td></tr>
+<tr><td>EV/EBITDA</td><td>13.1</td><td>43.0</td><td>&lt; market median</td><td class="fail">No</td></tr>
+<tr class="alt"><td>Dividend Yield</td><td>1.0%</td><td>87.1</td><td>&gt; market median</td><td class="pass">Yes</td></tr>
+</table>
+
+<h3>Momentum &mdash; eligible (3 of 4 pass) &mdash; Style Score 70.9</h3>
+<table>
+<tr><th>Metric</th><th>Raw Value</th><th>Score</th><th>Requirement</th><th>Pass?</th></tr>
+<tr><td>6 Month Return</td><td>+2.4%</td><td>64.2</td><td>&gt; 0%</td><td class="pass">Yes</td></tr>
+<tr class="alt"><td>12 Month Return</td><td>&minus;4.9%</td><td>59.6</td><td>&gt; 0%</td><td class="fail">No</td></tr>
+<tr><td>Relative Strength vs Nifty</td><td>1.017</td><td>59.6</td><td>&gt; 1</td><td class="pass">Yes</td></tr>
+<tr class="alt"><td>Price &gt; 200 DMA</td><td>Yes</td><td>100.0</td><td>Yes</td><td class="pass">Yes</td></tr>
+</table>
+
+<h3>Quality &mdash; NOT eligible (2 of 4 pass, needs 3) &mdash; Style Score 55.5</h3>
+<table>
+<tr><th>Metric</th><th>Raw Value</th><th>Score</th><th>Requirement</th><th>Pass?</th></tr>
+<tr><td>ROE</td><td>17.4%</td><td>72.1</td><td>&ge; 15%</td><td class="pass">Yes</td></tr>
+<tr class="alt"><td>ROCE</td><td>16.5%</td><td>65.9</td><td>&ge; 15%</td><td class="pass">Yes</td></tr>
+<tr><td>Debt/Equity</td><td>0.62</td><td>28.6</td><td>&le; 0.50</td><td class="fail">No</td></tr>
+<tr class="alt"><td>Interest Coverage</td><td>N/A</td><td>N/A</td><td>&ge; 5x</td><td class="fail">No (no data)</td></tr>
+</table>
+
+<h3>Low Volatility &mdash; eligible (3 of 3 pass) &mdash; Style Score 76.9</h3>
+<table>
+<tr><th>Metric</th><th>Raw Value</th><th>Score</th><th>Requirement</th><th>Pass?</th></tr>
+<tr><td>Beta</td><td>0.94</td><td>33.0</td><td>&lt; 1</td><td class="pass">Yes</td></tr>
+<tr class="alt"><td>Annualized Volatility</td><td>18.9%</td><td>99.6</td><td>&lt; market median</td><td class="pass">Yes</td></tr>
+<tr><td>Maximum Drawdown</td><td>19.0%</td><td>97.9</td><td>&lt; market median</td><td class="pass">Yes</td></tr>
+</table>
+
+<h3>Liquidity &mdash; eligible (2 of 2 pass) &mdash; Style Score 99.5</h3>
+<table>
+<tr><th>Metric</th><th>Raw Value</th><th>Score</th><th>Requirement</th><th>Pass?</th></tr>
+<tr><td>Average Daily Volume</td><td>18,909 ('000)</td><td>99.0</td><td>&gt; market median</td><td class="pass">Yes</td></tr>
+<tr class="alt"><td>Average Daily Turnover</td><td>&#8377;2,446 Cr</td><td>100.0</td><td>&gt; market median</td><td class="pass">Yes</td></tr>
+</table>
+
+<p><b>Result: Among the 4 eligible styles (Growth 64.4, Momentum 70.9, Low Volatility 76.9, Liquidity 99.5), Liquidity wins.<br/>
+Primary Style = Liquidity (99.5) &rarr; Rating: Exceptional. Secondary Style = Low Volatility (76.9).</b></p>
+<p><b>Market Cap Size:</b> Large Cap (separate classification, not part of the Primary/Secondary competition).</p>
+
+<div class="note">
+<b>Worth noting:</b> Quality was knocked out by Debt/Equity (a bank&rsquo;s inherent leverage looks &ldquo;bad&rdquo; by a non-bank yardstick) and a missing Interest Coverage figure &mdash; even though ROE and ROCE both passed comfortably. Value also just missed (2 of 4). This is a known limitation of applying the same Quality metrics to financial-sector stocks without a carve-out, similar to how the existing Risk-O-Meter module already excludes Interest Coverage for banks/NBFCs.
+</div>
+
+<p class="caption">All weights, thresholds and eligibility rules used above are configurable in style_config.json.</p>
+
+</body>
+</html>

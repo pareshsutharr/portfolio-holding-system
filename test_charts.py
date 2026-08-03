@@ -1,0 +1,3 @@
+from charts import generate_all_charts
+
+generate_all_charts(analysis)

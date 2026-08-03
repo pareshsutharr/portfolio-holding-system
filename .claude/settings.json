@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx shadcn@latest add avatar separator collapsible dropdown-menu button card badge -y)",
+      "Bash(npx shadcn@latest add dialog progress tooltip skeleton -y)",
+      "Bash(grep -iE \"^\\(trending-up|layout-dashboard|file-spreadsheet|users|gauge|bar-chart-3|file-bar-chart|database|settings|sparkles|arrow-right|chevron-right|chevron-down|menu|x|search|bell|circle-help|plus|download|upload-cloud|shield-check|activity|check|sparkle\\)\\\\.js$\")",
+      "Bash(node -e \"console.log\\(require.resolve\\('playwright'\\)\\)\")",
+      "Bash(curl -s -o /tmp/home.html -w \"status: %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s -o /tmp/v2.html -w \"status: %{http_code}\\\\n\" http://localhost:3000/dashboard-v2)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(node shot.js)",
+      "Bash(sed -i '' -e 's/font-serif //g' -e 's/ font-serif//g' -e 's/font-serif//g' components/dashboard.tsx components/app-shell.tsx)",
+      "Bash(echo \"grep exit: $?\")",
+      "Bash(lsof -ti:3001 -sTCP:LISTEN)",
+      "Bash(ps -p 79488 -o pid,command)",
+      "Bash(curl -s -o /dev/null -w \"3001 status: %{http_code}\\\\n\" http://localhost:3001/dashboard-v2)",
+      "Bash(ps -p 79488 -o pid,lstart,command)"
+    ]
+  }
+}
