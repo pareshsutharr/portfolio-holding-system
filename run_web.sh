@@ -38,3 +38,6 @@ WEB_PID=$!
 echo "Portfolio Analyzer UI: http://localhost:3001"
 echo "Portfolio Analyzer API: http://localhost:8000/docs"
 wait
+
+
+# dddd
