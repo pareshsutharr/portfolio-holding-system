@@ -6,6 +6,7 @@ import argparse
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from sqlalchemy.dialects.postgresql import insert
 
 from api.data_center import ENTRIES, ROOT
@@ -23,6 +24,7 @@ def source_files(entry) -> list[Path]:
 
 
 def main() -> None:
+    load_dotenv()
     parser = argparse.ArgumentParser()
     parser.add_argument("--category", action="append", help="Upload only this category (repeatable)")
     parser.add_argument("--dry-run", action="store_true")
