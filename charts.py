@@ -7,7 +7,7 @@ import numpy as np
 # OUTPUT DIRECTORY
 # =====================================
 
-OUTPUT_DIR = "output"
+OUTPUT_DIR = os.getenv("OUTPUT_DIR", "/tmp/portfolio-output" if os.getenv("VERCEL") else "output")
 
 os.makedirs(
     OUTPUT_DIR,

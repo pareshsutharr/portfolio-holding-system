@@ -30,7 +30,7 @@ from api.auth import AuthConfigurationError, Principal, hash_password, issue_tok
 from api.data_center import router as data_center_router
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNS_DIR = ROOT / "runtime" / "analyses"
+RUNS_DIR = Path("/tmp/portfolio-analyses") if os.getenv("VERCEL") else ROOT / "runtime" / "analyses"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 ALLOWED_SUFFIXES = {".xlsx", ".xls"}
 CLIENT_ENGINE = build_engine(Settings.from_env().database_url)

@@ -19,7 +19,7 @@ from config import STYLE_BSE_PRICE_DIR, STYLE_NIFTY_FILE, STYLE_NSE_PRICE_DIR
 
 MONTHS_LOADED = 38  # 3 low-volatility years + buffer for 200DMA / lookback
 MIN_NSE_OBSERVATIONS = 40  # below this, an ISIN is topped up from BSE
-CACHE_DIR = Path(".style_cache")
+CACHE_DIR = Path("/tmp/portfolio-style-cache") if os.getenv("VERCEL") else Path(".style_cache")
 
 
 def _month_key(path):

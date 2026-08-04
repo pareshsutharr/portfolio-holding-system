@@ -17,7 +17,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 ROOT = Path(__file__).resolve().parents[1]
-BACKUP_DIR = ROOT / "runtime" / "data-center-backups"
+BACKUP_DIR = Path("/tmp/data-center-backups") if os.getenv("VERCEL") else ROOT / "runtime" / "data-center-backups"
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 
