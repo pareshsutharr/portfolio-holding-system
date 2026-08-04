@@ -21,6 +21,10 @@ SESSION_SECONDS = 12 * 60 * 60
 security = HTTPBearer(auto_error=False)
 
 
+class AuthConfigurationError(RuntimeError):
+    """Raised when a deployment cannot safely sign persistent sessions."""
+
+
 def hash_password(password: str) -> str:
     if len(password) < 8:
         raise ValueError("Password must contain at least 8 characters")
@@ -46,6 +50,10 @@ def _secret() -> bytes:
     value = os.getenv("AUTH_SECRET", "")
     if len(value) >= 32:
         return value.encode()
+    if os.getenv("VERCEL") or os.getenv("RENDER") or os.getenv("ENVIRONMENT") == "production":
+        raise AuthConfigurationError(
+            "AUTH_SECRET must be configured with at least 32 characters"
+        )
     # Local installations get a stable, private generated key. Deployments should
     # supply AUTH_SECRET so sessions remain valid across multiple instances.
     secret_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "runtime", ".auth-secret")

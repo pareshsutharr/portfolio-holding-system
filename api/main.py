@@ -25,7 +25,7 @@ from market_etl.config import Settings
 from market_etl.database import build_engine
 from market_etl.models import Base, ClientOnboarding, PortfolioRun, ReportConfiguration, UserAccount
 from portfolio_service import PortfolioAnalysisService
-from api.auth import Principal, hash_password, issue_token, principal_dependency, require_admin, verify_password
+from api.auth import AuthConfigurationError, Principal, hash_password, issue_token, principal_dependency, require_admin, verify_password
 
 from api.data_center import router as data_center_router
 
@@ -165,9 +165,13 @@ def register(request: RegisterRequest) -> dict:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         user = UserAccount(id=str(uuid.uuid4()), email=email, full_name=request.full_name.strip(), password_hash=encoded, role="client")
         session.add(user)
+        try:
+            token = issue_token(user)
+        except AuthConfigurationError as exc:
+            session.rollback()
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         session.commit()
         session.refresh(user)
-        token = issue_token(user)
         return _session_payload(Principal(user, user), token)
 
 
@@ -178,10 +182,14 @@ def login(request: LoginRequest) -> dict:
         user = session.scalar(select(UserAccount).where(UserAccount.email == email))
         if not user or not user.is_active or not verify_password(request.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Email or password is incorrect")
+        try:
+            token = issue_token(user)
+        except AuthConfigurationError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         user.last_login_at = datetime.now(timezone.utc)
         session.commit()
         session.refresh(user)
-        return _session_payload(Principal(user, user), issue_token(user))
+        return _session_payload(Principal(user, user), token)
 
 
 @app.get("/api/auth/me")

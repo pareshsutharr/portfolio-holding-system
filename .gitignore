@@ -10,4 +10,10 @@ __pycache__/
 output/
 ~$*.xlsx
 runtime/
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# The former standalone frontend is retained locally during migration.
 web/

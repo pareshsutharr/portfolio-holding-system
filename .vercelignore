@@ -1,0 +1,25 @@
+# Local environments and generated output
+.git/
+.venv/
+.venv-python39/
+.pytest_cache/
+.style_cache/
+__pycache__/
+.next/
+node_modules/
+runtime/
+output/
+
+# Retired nested frontend checkout; the active app is now in /src.
+web/
+
+# Development-only source data and documentation.
+Data/
+Data_NSE/
+Data_BSE/
+docs/
+test_files/
+tests/
+*.doc
+*.docx
+October.xlsx
