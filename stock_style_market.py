@@ -62,7 +62,11 @@ def _load_price_history(directory, isin_idx, date_idx, close_idx, cache_name):
     signature = _cache_signature(files)
 
     if cache_file.exists() and sig_file.exists() and sig_file.read_text(encoding="utf-8") == signature:
-        return pd.read_parquet(cache_file)
+        try:
+            return pd.read_parquet(cache_file)
+        except (ImportError, ValueError):
+            # Parquet acceleration is optional in lightweight serverless builds.
+            pass
 
     rows = []
     for path in files:
@@ -72,8 +76,13 @@ def _load_price_history(directory, isin_idx, date_idx, close_idx, cache_name):
     long_df = long_df.drop_duplicates(subset=["isin", "date"], keep="last")
     wide = long_df.pivot(index="date", columns="isin", values="close").sort_index()
 
-    wide.to_parquet(cache_file)
-    sig_file.write_text(signature, encoding="utf-8")
+    try:
+        wide.to_parquet(cache_file)
+        sig_file.write_text(signature, encoding="utf-8")
+    except (ImportError, ValueError, OSError):
+        # Continue with the in-memory frame when no Parquet engine is bundled
+        # or the deployment filesystem is read-only.
+        pass
     return wide
 
 

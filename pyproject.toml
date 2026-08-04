@@ -10,15 +10,12 @@ dependencies = [
     "numpy",
     "openpyxl",
     "pandas",
-    "pdfplumber",
     "psycopg[binary]>=3.2,<4.0",
-    "pyarrow<22",
     "python-dotenv>=1.0,<2.0",
     "python-multipart>=0.0.20,<1.0",
     "reportlab",
     "requests",
     "sqlalchemy>=2.0,<3.0",
-    "uvicorn[standard]>=0.34,<1.0",
     "yfinance>=0.2.54,<1.0",
 ]
 
