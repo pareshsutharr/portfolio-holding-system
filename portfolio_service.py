@@ -31,6 +31,7 @@ from holdings_parser import parse_holdings
 from market_cap import add_market_cap
 from market_etl.config import Settings
 from market_etl.database import build_engine
+from market_etl.storage_assets import hydrate_style_assets
 from pdf_reports import PortfolioPDF
 from portfolio_analysis import analyze_portfolio
 from portfolio_returns import analyze_portfolio_returns
@@ -93,6 +94,7 @@ class PortfolioAnalysisService:
         )
 
     def analyze(self, holdings_file: Path, output_pdf: Path, report_options: dict | None = None) -> dict[str, Any]:
+        hydrate_style_assets(self.engine)
         detected = detect_header(holdings_file)
         mapping = get_column_mapping(detected["headers"])
         portfolio = parse_holdings(

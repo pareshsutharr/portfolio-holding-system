@@ -16,6 +16,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert
+
+from market_etl.config import Settings
+from market_etl.database import build_engine, build_session_factory
+from market_etl.models import ManagedDataAsset
+from market_etl.storage_assets import SupabaseStorage, asset_object_path
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKUP_DIR = Path("/tmp/data-center-backups") if os.getenv("VERCEL") else ROOT / "runtime" / "data-center-backups"
@@ -238,6 +245,73 @@ ENTRIES_BY_KEY = {entry.key: entry for entry in ENTRIES}
 router = APIRouter(prefix="/api/data-center", tags=["data-center"])
 
 
+def _storage() -> SupabaseStorage | None:
+    return SupabaseStorage.from_env()
+
+
+def _sessions():
+    return build_session_factory(build_engine(Settings.from_env().database_url))
+
+
+def _remote_assets(category_key: str) -> list[dict]:
+    if _storage() is None:
+        return []
+    with _sessions()() as session:
+        rows = session.scalars(
+            select(ManagedDataAsset)
+            .where(ManagedDataAsset.category_key == category_key)
+            .order_by(ManagedDataAsset.original_name.desc())
+        ).all()
+    return [
+        {
+            "name": row.original_name,
+            "size_bytes": row.size_bytes,
+            "modified_at": row.updated_at.isoformat(),
+        }
+        for row in rows
+    ]
+
+
+def _register_remote(entry: DataEntry, filename: str, data: bytes) -> None:
+    storage = _storage()
+    if storage is None:
+        return
+    asset = storage.upload_bytes(asset_object_path(entry.key, filename), data, filename)
+    with _sessions().begin() as session:
+        session.execute(
+            insert(ManagedDataAsset)
+            .values(
+                object_path=asset.object_path,
+                category_key=entry.key,
+                bucket_id=storage.bucket,
+                original_name=asset.original_name,
+                content_type=asset.content_type,
+                size_bytes=asset.size_bytes,
+                sha256=asset.sha256,
+            )
+            .on_conflict_do_update(
+                index_elements=[ManagedDataAsset.object_path],
+                set_={
+                    "original_name": asset.original_name,
+                    "content_type": asset.content_type,
+                    "size_bytes": asset.size_bytes,
+                    "sha256": asset.sha256,
+                    "updated_at": datetime.now(timezone.utc),
+                },
+            )
+        )
+
+
+def _delete_remote(entry: DataEntry, filename: str) -> None:
+    storage = _storage()
+    if storage is None:
+        return
+    object_path = asset_object_path(entry.key, filename)
+    storage.delete([object_path])
+    with _sessions().begin() as session:
+        session.execute(delete(ManagedDataAsset).where(ManagedDataAsset.object_path == object_path))
+
+
 def _entry(key: str) -> DataEntry:
     entry = ENTRIES_BY_KEY.get(key)
     if entry is None:
@@ -296,13 +370,14 @@ def _entry_payload(entry: DataEntry) -> dict:
         "extensions": list(entry.extensions),
         "consumers": entry.consumers,
     }
+    remote = _remote_assets(entry.key)
     if entry.kind == "single_file":
         primary = ROOT / entry.paths[0]
-        payload["file"] = _file_info(primary)
+        payload["file"] = remote[0] if remote else _file_info(primary)
         payload["synced_paths"] = list(entry.paths) if len(entry.paths) > 1 else []
     else:
         folder = ROOT / entry.paths[0]
-        files = _folder_files(folder)
+        files = remote or _folder_files(folder)
         payload["files"] = files
         payload["file_count"] = len(files)
         payload["total_size_bytes"] = sum(item["size_bytes"] for item in files)
@@ -328,6 +403,9 @@ async def upload_single_file(key: str, file: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=400, detail=f"{entry.label} manages multiple files; use the folder endpoint")
     _validate_extension(entry, file.filename or "")
     data = await _read_upload(file)
+    if _storage() is not None:
+        _register_remote(entry, Path(entry.paths[0]).name, data)
+        return _entry_payload(entry)
     for relative in entry.paths:
         target = ROOT / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -342,6 +420,12 @@ def delete_single_file(key: str) -> dict:
     if entry.kind != "single_file":
         raise HTTPException(status_code=400, detail=f"{entry.label} manages multiple files; use the folder endpoint")
     primary = ROOT / entry.paths[0]
+    if _storage() is not None:
+        remote = _remote_assets(entry.key)
+        if not remote:
+            raise HTTPException(status_code=404, detail=f"{entry.label} has no file to delete")
+        _delete_remote(entry, remote[0]["name"])
+        return _entry_payload(entry)
     if not primary.exists():
         raise HTTPException(status_code=404, detail=f"{entry.label} has no file to delete")
     for relative in entry.paths:
@@ -359,6 +443,9 @@ async def add_folder_file(key: str, file: UploadFile = File(...)) -> dict:
     filename = _safe_name(file.filename or "")
     _validate_extension(entry, filename)
     data = await _read_upload(file)
+    if _storage() is not None:
+        _register_remote(entry, filename, data)
+        return _entry_payload(entry)
     folder = ROOT / entry.paths[0]
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / filename
@@ -373,6 +460,12 @@ def delete_folder_file(key: str, filename: str) -> dict:
     if entry.kind != "file_folder":
         raise HTTPException(status_code=400, detail=f"{entry.label} manages a single file; use the file endpoint")
     safe_filename = _safe_name(filename)
+    if _storage() is not None:
+        remote_names = {item["name"] for item in _remote_assets(entry.key)}
+        if safe_filename not in remote_names:
+            raise HTTPException(status_code=404, detail="File not found")
+        _delete_remote(entry, safe_filename)
+        return _entry_payload(entry)
     target = ROOT / entry.paths[0] / safe_filename
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")

@@ -27,21 +27,52 @@ BSE500_FILE = "test_files/BSE500.xlsx"
 # STOCK STYLE CLASSIFICATION DATA
 # =====================================
 
-STYLE_DATA_DIR = "Portfolio Analyzer Data"
+STYLE_DATA_DIR = os.getenv(
+    "STYLE_DATA_DIR",
+    "/tmp/portfolio-reference-data" if os.getenv("VERCEL") else "Portfolio Analyzer Data",
+)
 
-STYLE_GROWTH_FILE = f"{STYLE_DATA_DIR}/Data_Growth.xlsx"
+STYLE_GROWTH_FILE = (
+    f"{STYLE_DATA_DIR}/growth_data/Data_Growth.xlsx"
+    if os.getenv("VERCEL")
+    else f"{STYLE_DATA_DIR}/Data_Growth.xlsx"
+)
 
-STYLE_VALUE_FILE = f"{STYLE_DATA_DIR}/Data_Value.xlsx"
+STYLE_VALUE_FILE = (
+    f"{STYLE_DATA_DIR}/value_data/Data_Value.xlsx"
+    if os.getenv("VERCEL")
+    else f"{STYLE_DATA_DIR}/Data_Value.xlsx"
+)
 
-STYLE_QUALITY_FILE = f"{STYLE_DATA_DIR}/Data_Quality.xlsx"
+STYLE_QUALITY_FILE = (
+    f"{STYLE_DATA_DIR}/quality_data/Data_Quality.xlsx"
+    if os.getenv("VERCEL")
+    else f"{STYLE_DATA_DIR}/Data_Quality.xlsx"
+)
 
-STYLE_LIQUIDITY_FILE = f"{STYLE_DATA_DIR}/Data_Liquidity.xlsx"
+STYLE_LIQUIDITY_FILE = (
+    f"{STYLE_DATA_DIR}/liquidity_data/Data_Liquidity.xlsx"
+    if os.getenv("VERCEL")
+    else f"{STYLE_DATA_DIR}/Data_Liquidity.xlsx"
+)
 
-STYLE_NSE_PRICE_DIR = f"{STYLE_DATA_DIR}/Data_NSE"
+STYLE_NSE_PRICE_DIR = (
+    f"{STYLE_DATA_DIR}/daily_prices_nse"
+    if os.getenv("VERCEL")
+    else f"{STYLE_DATA_DIR}/Data_NSE"
+)
 
-STYLE_BSE_PRICE_DIR = f"{STYLE_DATA_DIR}/Data_BSE"
+STYLE_BSE_PRICE_DIR = (
+    f"{STYLE_DATA_DIR}/daily_prices_bse"
+    if os.getenv("VERCEL")
+    else f"{STYLE_DATA_DIR}/Data_BSE"
+)
 
-STYLE_NIFTY_FILE = f"{STYLE_DATA_DIR}/Data_Nifty_50.csv"
+STYLE_NIFTY_FILE = (
+    f"{STYLE_DATA_DIR}/nifty50_index/Data_Nifty_50.csv"
+    if os.getenv("VERCEL")
+    else f"{STYLE_DATA_DIR}/Data_Nifty_50.csv"
+)
 
 STYLE_CONFIG_FILE = "style_config.json"
 

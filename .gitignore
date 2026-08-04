@@ -17,3 +17,4 @@ next-env.d.ts
 
 # The former standalone frontend is retained locally during migration.
 web/
+.vercel
