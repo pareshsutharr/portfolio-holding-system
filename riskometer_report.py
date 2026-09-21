@@ -198,7 +198,7 @@ def build_riskometer_story(
     )
     section = ParagraphStyle(
         "DashboardSection", parent=styles["Heading2"], fontName="Helvetica-Bold",
-        fontSize=13, leading=16, textColor=RED, spaceAfter=6,
+        fontSize=13, leading=16, textColor=colors.HexColor("#0E8290"), spaceAfter=6,
     )
     body = ParagraphStyle(
         "RiskBody", parent=styles["BodyText"], fontName="Helvetica",
@@ -215,155 +215,195 @@ def build_riskometer_story(
         "Level", parent=body, fontName="Helvetica-Bold", fontSize=9,
         alignment=1, textColor=colors.HexColor(LEVEL_COLORS[analysis["overall_level"]]),
     )
+    compact = ParagraphStyle(
+        "RiskCompact", parent=body, fontSize=6.2, leading=7.6,
+        textColor=colors.HexColor("#334155"),
+    )
+    compact_muted = ParagraphStyle(
+        "RiskCompactMuted", parent=compact, fontSize=5.6, leading=6.8, textColor=MUTED,
+    )
+    compact_header = ParagraphStyle(
+        "RiskCompactHeader", parent=compact, fontName="Helvetica-Bold",
+        fontSize=6.4, leading=7.5, textColor=NAVY,
+    )
+
     overview = Table(
         [[
             [
-                Paragraph("Overall Portfolio Risk", small),
+                Paragraph("Overall risk", compact_muted),
                 Paragraph(f"{analysis['overall_score']:.2f}", score_style),
                 Paragraph(f"{escape(analysis['overall_level'].upper())} RISK", level_style),
             ],
             [
-                Paragraph("Portfolio Value Analysed", small),
-                Paragraph(f"Rs. {analysis['total_value']:,.2f}", ParagraphStyle(
-                    "Value", parent=body, fontName="Helvetica-Bold", fontSize=15, leading=20, textColor=NAVY
+                Paragraph("Portfolio value analysed", compact_muted),
+                Paragraph(f"Rs. {analysis['total_value']:,.0f}", ParagraphStyle(
+                    "CompactValue", parent=compact, fontName="Helvetica-Bold",
+                    fontSize=12, leading=15, textColor=NAVY,
                 )),
-                Paragraph("Seven independent measurable risk modules", small),
+                Paragraph("Seven measurable modules", compact_muted),
             ],
         ]],
-        colWidths=[79 * mm, 79 * mm],
+        colWidths=[doc_width * 0.155, doc_width * 0.155],
     )
     overview.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LINEAFTER", (0, 0), (0, 0), 0.6, CARD_BORDER),
-        ("LEFTPADDING", (0, 0), (-1, -1), 12),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LINEAFTER", (0, 0), (0, 0), 0.5, CARD_BORDER),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
-
-    gauge_content = Table(
+    gauge_panel = Table(
         [
             [Paragraph("Portfolio Risk Meter", section)],
-            [Table([[""]], colWidths=[158 * mm], rowHeights=[0.5], style=[("BACKGROUND", (0, 0), (-1, -1), CARD_BORDER)])],
-            [Image(str(gauge_path), width=145 * mm, height=79 * mm)],
+            [overview],
+            [Image(str(gauge_path), width=doc_width * 0.29, height=doc_width * 0.155)],
         ],
-        colWidths=[160 * mm],
+        colWidths=[doc_width * 0.32],
     )
-    gauge_content.setStyle(TableStyle([
+    gauge_panel.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+
+    rows: list[list] = [[
+        Paragraph("Risk module", compact_header),
+        Paragraph("Score", compact_header),
+        Paragraph("Level", compact_header),
+        Paragraph("Risk scale", compact_header),
+        Paragraph("Coverage", compact_header),
+    ]]
+    for result in analysis["results"]:
+        rows.append([
+            Paragraph(escape(result.name.replace("_", " ").title()), compact_header),
+            Paragraph(f"<b>{result.score:.2f}</b>", compact),
+            Paragraph(
+                f"<font color='{LEVEL_COLORS[result.level]}'><b>{escape(result.level)}</b></font>",
+                compact,
+            ),
+            _score_bar(result.score, result.level),
+            Paragraph(escape(result.coverage), compact_muted),
+        ])
+    rows.append([
+        Paragraph("Overall portfolio risk", compact_header),
+        Paragraph(f"<b>{analysis['overall_score']:.2f}</b>", compact),
+        Paragraph(
+            f"<font color='{LEVEL_COLORS[analysis['overall_level']]}'><b>{escape(analysis['overall_level'])}</b></font>",
+            compact,
+        ),
+        _score_bar(analysis["overall_score"], analysis["overall_level"]),
+        Paragraph("Weighted score", compact_muted),
+    ])
+    scorecard_width = doc_width * 0.62
+    scorecard = Table(
+        rows,
+        colWidths=[
+            scorecard_width * 0.22,
+            scorecard_width * 0.10,
+            scorecard_width * 0.13,
+            scorecard_width * 0.22,
+            scorecard_width * 0.33,
+        ],
+    )
+    scorecard.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EAF3F6")),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#F1F5F9")),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#E2E8F0")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (1, 1), (3, -1), "CENTER"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3.2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3.2),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#FAFAFB")]),
+    ]))
+    scorecard_panel = Table(
+        [[Paragraph("Risk Module Scorecard", section)], [scorecard]],
+        colWidths=[scorecard_width],
+    )
+    scorecard_panel.setStyle(TableStyle([
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
         ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
     ]))
 
-    story: list[Flowable] = [
-        Paragraph("Portfolio Risk-O-Meter", title),
-        Paragraph("A transparent view of concentration, quality, liquidity and market risk.", small),
-        Spacer(1, 8),
-        RoundedCard(overview, doc_width),
-        Spacer(1, 10),
-        RoundedCard(gauge_content, doc_width),
-        PageBreak(),
-        Paragraph("Risk Module Scorecard", section),
-    ]
-
-    rows: list[list] = [[
-        Paragraph("<b>Risk Type</b>", body),
-        Paragraph("<b>Score</b>", body),
-        Paragraph("<b>Level</b>", body),
-        Paragraph("<b>Risk Scale</b>", body),
-        Paragraph("<b>Coverage</b>", body),
-    ]]
-    for result in analysis["results"]:
-        level_color = LEVEL_COLORS[result.level]
-        rows.append([
-            Paragraph(f"<b>{escape(result.name.replace('_', ' ').title())}</b>", body),
-            Paragraph(f"<b>{result.score:.2f}</b>", body),
-            Paragraph(f"<font color='{level_color}'><b>{escape(result.level)}</b></font>", body),
-            _score_bar(result.score, result.level),
-            Paragraph(escape(result.coverage), small),
-        ])
-    rows.append([
-        Paragraph("<b>Overall Portfolio Risk</b>", body),
-        Paragraph(f"<b>{analysis['overall_score']:.2f}</b>", body),
-        Paragraph(
-            f"<font color='{LEVEL_COLORS[analysis['overall_level']]}'><b>{escape(analysis['overall_level'])}</b></font>",
-            body,
-        ),
-        _score_bar(analysis["overall_score"], analysis["overall_level"]),
-        Paragraph("Weighted score", small),
-    ])
-    scorecard = Table(
-        rows, colWidths=[43 * mm, 17 * mm, 25 * mm, 45 * mm, 30 * mm],
-        repeatRows=1,
+    top_dashboard = Table(
+        [[RoundedCard(gauge_panel, doc_width * 0.34, padding=7), RoundedCard(scorecard_panel, doc_width * 0.64, padding=7)]],
+        colWidths=[doc_width * 0.35, doc_width * 0.65],
     )
-    scorecard.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FFF3F3")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), RED),
-        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#F1F5F9")),
-        ("GRID", (0, 0), (-1, -1), 0.45, colors.HexColor("#E2E8F0")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (1, 1), (2, -1), "CENTER"),
-        ("ALIGN", (3, 1), (3, -1), "CENTER"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#FAFAFB")]),
+    top_dashboard.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("RIGHTPADDING", (0, 0), (0, 0), 6),
+        ("LEFTPADDING", (1, 0), (1, 0), 6),
+        ("RIGHTPADDING", (1, 0), (1, 0), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
-    story.extend([RoundedCard(scorecard, doc_width), PageBreak()])
 
+    cards_per_row = 4
+    card_width = doc_width * (0.98 / cards_per_row)
+    explanation_cards = []
     for result in analysis["results"]:
-        detail_rows = [
-            [
-                Paragraph(f"<b>{result.score:.2f}</b>", ParagraphStyle(
-                    f"{result.name}Score", parent=score_style,
-                    textColor=colors.HexColor(LEVEL_COLORS[result.level]),
-                )),
-                Paragraph(
-                    f"<font color='{LEVEL_COLORS[result.level]}'><b>{escape(result.level.upper())} RISK</b></font><br/>"
-                    f"<font color='#64748B'>Coverage: {escape(result.coverage)}</font>",
-                    body,
-                ),
-            ],
-            [
-                Paragraph("<b>Calculated values</b>", body),
-                Paragraph(escape("  |  ".join(f"{key}: {value}" for key, value in result.values.items())), body),
-            ],
-            [Paragraph("<b>Formula</b>", body), Paragraph(escape(result.formula), body)],
-            [Paragraph("<b>Why this score?</b>", body), Paragraph(escape(result.explanation), body)],
-        ]
-        detail_table = Table(detail_rows, colWidths=[38 * mm, 120 * mm])
-        detail_table.setStyle(TableStyle([
-            ("SPAN", (0, 0), (0, 0)),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.5, CARD_BORDER),
-            ("LINEBELOW", (0, 1), (-1, -2), 0.35, colors.HexColor("#EEF0F3")),
-            ("LEFTPADDING", (0, 0), (-1, -1), 7),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 7),
-            ("TOPPADDING", (0, 0), (-1, -1), 7),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        card_text = (
+            f"<b>{escape(result.name.replace('_', ' ').title())} - {result.score:.2f} "
+            f"<font color='{LEVEL_COLORS[result.level]}'>{escape(result.level)}</font></b><br/>"
+            f"{escape(result.explanation)}<br/>"
+            f"<font color='#64748B'>Coverage: {escape(result.coverage)}</font>"
+        )
+        card = Table([[Paragraph(card_text, compact)]], colWidths=[card_width])
+        card.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+            ("BOX", (0, 0), (-1, -1), 0.45, CARD_BORDER),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ]))
-        story.extend([
-            KeepTogether([
-                Paragraph(f"{result.name.replace('_', ' ').title()} Risk", section),
-                RoundedCard(detail_table, doc_width),
-                Spacer(1, 11),
-            ])
-        ])
+        explanation_cards.append(card)
+    while len(explanation_cards) % cards_per_row:
+        explanation_cards.append(Spacer(1, 1))
+    explanation_rows = [
+        explanation_cards[index:index + cards_per_row]
+        for index in range(0, len(explanation_cards), cards_per_row)
+    ]
+    explanations = Table(
+        explanation_rows,
+        colWidths=[card_width] * cards_per_row,
+        hAlign="LEFT",
+    )
+    explanations.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
 
-    story.extend([
-        Spacer(1, 4),
+    return [
         Paragraph(
-            "Methodology note: Scores and module weights are configurable in riskometer_config.json. "
-            "The Risk-O-Meter is an analytical indicator based on available portfolio, market, "
-            "fundamental and NIFTY 50 data; it is not investment advice.",
-            small,
+            "RISK ANALYSIS",
+            ParagraphStyle("RiskKicker", parent=small, fontName="Helvetica-Bold", fontSize=7, textColor=colors.HexColor("#0E8290"), spaceAfter=2),
         ),
-    ])
-    return story
+        Paragraph("Portfolio Risk-O-Meter", title),
+        Paragraph("One-page view of the overall meter, complete module scorecard, and explanation of every score.", small),
+        Spacer(1, 5),
+        top_dashboard,
+        Spacer(1, 5),
+        Paragraph("What drives each score", section),
+        explanations,
+        Spacer(1, 3),
+        Paragraph(
+            "Methodology note: configurable analytical indicators based on available portfolio, market, "
+            "fundamental and NIFTY 50 data; not investment advice.",
+            compact_muted,
+        ),
+    ]
 
 
 def generate_riskometer_pdf(analysis: dict, output: Path) -> None:

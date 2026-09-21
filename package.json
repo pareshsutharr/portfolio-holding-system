@@ -3,10 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently --kill-others --names api,web,scheduler --prefix-colors cyan,green,magenta \"npm:dev:api\" \"npm:dev:web\" \"npm:dev:scheduler\"",
+    "dev:web": "next dev",
     "dev:api": ".venv/bin/python -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8000",
+    "dev:scheduler": ".venv/bin/python -m scripts.run_ingestion_scheduler",
     "build": "next build",
-    "start": "next start",
+    "start": "concurrently --kill-others --names api,web,scheduler --prefix-colors cyan,green,magenta \"npm:start:api\" \"npm:start:web\" \"npm:start:scheduler\"",
+    "start:web": "next start",
+    "start:api": ".venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000",
+    "start:scheduler": ".venv/bin/python -m scripts.run_ingestion_scheduler",
     "lint": "eslint",
     "test:api": ".venv/bin/python -m pytest -q",
     "check": "npm run lint && npm run build"
@@ -31,6 +36,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
+    "concurrently": "^9.2.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

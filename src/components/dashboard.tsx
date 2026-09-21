@@ -44,7 +44,8 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { authFetch, downloadAuthorized } from "@/lib/auth";
+import { authFetch } from "@/lib/auth";
+import { ReportDownloadDialog } from "@/components/report-download-dialog";
 import { Riskometer } from "@/components/riskometer";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL
@@ -69,6 +70,7 @@ type AnalysisStatus = {
   holdings?: number;
   risk_score?: number;
   risk_level?: string;
+  report_number?: string | null;
   error?: string;
 };
 
@@ -103,7 +105,8 @@ type Preview = {
   upload_id: string;
   holding_count: number;
   portfolio_value: number;
-  mapping: Record<string, string>;
+  mapping?: Record<string, string>;
+  unresolved_names?: string[];
   holdings: Array<Record<string, string | number>>;
 };
 
@@ -133,6 +136,7 @@ export function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [reportId, setReportId] = useState("");
+  const [downloadRunId, setDownloadRunId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const step = useMemo(() => {
@@ -244,7 +248,7 @@ export function Dashboard() {
             variant="outline"
             className="h-10 gap-2 rounded-lg border-[#cfd8d5] px-4 text-[12px] font-bold"
             disabled={!latestCompleteRun}
-            onClick={() => latestCompleteRun && downloadAuthorized(`/api/analyses/${latestCompleteRun.id}/report`, `portfolio-${latestCompleteRun.id.slice(0, 8)}.pdf`)}
+            onClick={() => latestCompleteRun && setDownloadRunId(latestCompleteRun.id)}
           >
             <Download size={16} /> Latest report
           </Button>
@@ -428,7 +432,14 @@ export function Dashboard() {
                       <FileBarChart size={18} />
                     </div>
                     <div className="min-w-0">
-                      <strong className="block truncate text-[10px] text-[#173337]">{run.filename}</strong>
+                      <div className="flex items-center gap-1.5">
+                        <strong className="truncate text-[10px] text-[#173337]">{run.filename}</strong>
+                        {run.report_number && (
+                          <span className="shrink-0 rounded-full bg-[#e9f0ef] px-1.5 py-0.5 font-mono text-[8px] font-bold tracking-wide text-teal">
+                            {run.report_number}
+                          </span>
+                        )}
+                      </div>
                       <span className="mt-1 flex items-center gap-1 text-[9px] text-[#84908c]"><Clock size={10} /> {formatDate(run.created_at)}</span>
                     </div>
                     <p className="m-0 text-[9px] text-[#84908c]">
@@ -449,7 +460,7 @@ export function Dashboard() {
                       <button
                         className="grid size-[31px] place-items-center rounded-md border border-line bg-white text-[#51615e] hover:bg-[#f5f7f4]"
                         aria-label="Download PDF report"
-                        onClick={() => downloadAuthorized(`/api/analyses/${run.id}/report`, `portfolio-${run.id.slice(0, 8)}.pdf`)}
+                        onClick={() => setDownloadRunId(run.id)}
                       >
                         <Download size={15} />
                       </button>
@@ -492,13 +503,13 @@ export function Dashboard() {
                 )}
                 onClick={() => inputRef.current?.click()}
               >
-                <input ref={inputRef} type="file" accept=".xlsx,.xls" hidden onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+                <input ref={inputRef} type="file" accept=".xlsx,.xls,.pdf" hidden onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
                 <div className="mb-3 grid size-[50px] place-items-center rounded-2xl bg-[#e3efeb] text-teal">
                   {file ? <FileSpreadsheet size={25} /> : <UploadCloud size={25} />}
                 </div>
-                <strong className="text-[13px]">{file ? file.name : "Drop your holdings workbook here"}</strong>
+                <strong className="text-[13px]">{file ? file.name : "Drop your holdings workbook or statement here"}</strong>
                 <p className="mt-1.5 text-[10px] text-[#87928e]">
-                  {file ? `${(file.size / 1024).toFixed(1)} KB · Ready to review` : "or click to browse · Excel up to 20 MB"}
+                  {file ? `${(file.size / 1024).toFixed(1)} KB · Ready to review` : "or click to browse · Excel or PDF up to 20 MB"}
                 </p>
               </button>
               <div className="my-5 flex gap-2.5 rounded-lg bg-[#f3f7f4] p-3 text-[#4d7463]">
@@ -522,16 +533,28 @@ export function Dashboard() {
                   <strong className="mt-1.5 block text-[18px] font-bold">{formatCurrency(preview.portfolio_value)}</strong>
                 </div>
               </div>
-              <h3 className="mb-2.5 text-[11px] font-semibold">Detected column mapping</h3>
-              <div className="overflow-hidden rounded-lg border border-line">
-                {Object.entries(preview.mapping).map(([field, column], index) => (
-                  <div key={field} className={cn("grid grid-cols-[1fr_1.4fr_auto] items-center gap-2 border-t border-line px-3.5 py-2.5 text-[10px]", index === 0 && "border-t-0")}>
-                    <span className="capitalize text-muted-text">{field.replace("_", " ")}</span>
-                    <strong>{column}</strong>
-                    <Check size={15} className="text-green" />
+              {preview.mapping && (
+                <>
+                  <h3 className="mb-2.5 text-[11px] font-semibold">Detected column mapping</h3>
+                  <div className="overflow-hidden rounded-lg border border-line">
+                    {Object.entries(preview.mapping).map(([field, column], index) => (
+                      <div key={field} className={cn("grid grid-cols-[1fr_1.4fr_auto] items-center gap-2 border-t border-line px-3.5 py-2.5 text-[10px]", index === 0 && "border-t-0")}>
+                        <span className="capitalize text-muted-text">{field.replace("_", " ")}</span>
+                        <strong>{column}</strong>
+                        <Check size={15} className="text-green" />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              )}
+              {!!preview.unresolved_names?.length && (
+                <div className="rounded-lg bg-[#fff7ed] p-3.5 text-[10px] text-[#92400e]">
+                  <strong className="block">
+                    {preview.unresolved_names.length} holding{preview.unresolved_names.length > 1 ? "s" : ""} couldn&apos;t be matched to a listed company and won&apos;t be included:
+                  </strong>
+                  <span>{preview.unresolved_names.join(", ")}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -548,7 +571,7 @@ export function Dashboard() {
                     <BarChart3 size={16} /> Open analysis
                   </a>
                 </Button>
-                <Button variant="outline" className="gap-2" onClick={() => downloadAuthorized(`/api/analyses/${reportId}/report`, `portfolio-${reportId.slice(0, 8)}.pdf`)}>
+                <Button variant="outline" className="gap-2" onClick={() => setDownloadRunId(reportId)}>
                   <Download size={16} /> PDF report
                 </Button>
               </div>
@@ -585,6 +608,7 @@ export function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ReportDownloadDialog runId={downloadRunId} open={!!downloadRunId} onOpenChange={open => { if (!open) setDownloadRunId(null); }} />
     </div>
   );
 }

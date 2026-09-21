@@ -24,19 +24,21 @@ def _symbol(value: object, suffix: str) -> str | None:
     return cleaned if cleaned.endswith((".NS", ".BO")) else f"{cleaned}{suffix}"
 
 
-def _latest_close(data: pd.DataFrame, ticker: str, ticker_count: int) -> float | None:
+def _latest_close(data: pd.DataFrame, ticker: str, ticker_count: int) -> tuple[float, date] | None:
     try:
         if ticker_count == 1 and not isinstance(data.columns, pd.MultiIndex):
             close = data["Close"]
         else:
             close = data[ticker]["Close"]
         close = pd.to_numeric(close, errors="coerce").dropna()
-        return round(float(close.iloc[-1]), 2) if not close.empty else None
+        if close.empty:
+            return None
+        return round(float(close.iloc[-1]), 2), close.index[-1].date()
     except (KeyError, IndexError, TypeError):
         return None
 
 
-def _download(tickers: Iterable[str]) -> dict[str, float]:
+def _download(tickers: Iterable[str]) -> dict[str, tuple[float, date]]:
     unique = list(dict.fromkeys(ticker for ticker in tickers if ticker))
     if not unique:
         return {}
@@ -53,9 +55,9 @@ def _download(tickers: Iterable[str]) -> dict[str, float]:
     except Exception:
         return {}
     return {
-        ticker: price
+        ticker: result
         for ticker in unique
-        if (price := _latest_close(data, ticker, len(unique))) is not None
+        if (result := _latest_close(data, ticker, len(unique))) is not None
     }
 
 
@@ -71,13 +73,16 @@ def add_yahoo_current_prices(portfolio: pd.DataFrame) -> pd.DataFrame:
         primary.append(override or _symbol(getattr(row, "nse_symbol", ""), ".NS"))
         fallback.append(None if override else _symbol(getattr(row, "bse_symbol", ""), ".BO"))
 
-    prices = _download([*primary, *fallback])
+    quotes = _download([*primary, *fallback])
     yahoo_prices: list[float | None] = []
+    yahoo_dates: list[str | None] = []
     used_tickers: list[str | None] = []
     for nse_ticker, bse_ticker in zip(primary, fallback):
-        ticker = nse_ticker if nse_ticker in prices else bse_ticker
-        yahoo_prices.append(prices.get(ticker) if ticker else None)
-        used_tickers.append(ticker if ticker in prices else None)
+        ticker = nse_ticker if nse_ticker in quotes else bse_ticker
+        quote = quotes.get(ticker) if ticker else None
+        yahoo_prices.append(quote[0] if quote else None)
+        yahoo_dates.append(quote[1].isoformat() if quote else None)
+        used_tickers.append(ticker if ticker in quotes else None)
 
     result["workbook_market_price"] = result["current_market_price"]
     result["yahoo_ticker"] = used_tickers
@@ -89,7 +94,10 @@ def add_yahoo_current_prices(portfolio: pd.DataFrame) -> pd.DataFrame:
     result["price_source"] = has_yahoo_price.map(
         {True: "Yahoo Finance", False: "Uploaded workbook"}
     )
-    result["price_as_of"] = date.today().isoformat()
+    # Only Yahoo-sourced prices have a known trading date; a workbook-fallback
+    # price's actual as-of date isn't known, so it's left blank rather than
+    # guessed as today.
+    result["price_as_of"] = yahoo_dates
     result["closing_value"] = (
         result["quantity"] * result["current_market_price"]
     ).round(2)

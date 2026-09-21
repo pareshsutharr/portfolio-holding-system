@@ -15,10 +15,12 @@ from sqlalchemy import (
     Index,
     JSON,
     Numeric,
+    Sequence,
     String,
     Text,
     BigInteger,
     UniqueConstraint,
+    CheckConstraint,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -26,23 +28,6 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
     pass
-
-
-class ManagedDataAsset(Base):
-    """Registry for private reference files stored in Supabase Storage."""
-
-    __tablename__ = "managed_data_assets"
-
-    object_path: Mapped[str] = mapped_column(Text, primary_key=True)
-    category_key: Mapped[str] = mapped_column(Text, nullable=False, index=True)
-    bucket_id: Mapped[str] = mapped_column(Text, nullable=False)
-    original_name: Mapped[str] = mapped_column(Text, nullable=False)
-    content_type: Mapped[str] = mapped_column(Text, nullable=False)
-    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
 
 class SectorIndustryMapping(Base):
@@ -113,6 +98,48 @@ class BenchmarkData(Base):
     __table_args__ = (Index("ix_benchmark_data_trade_date", "trade_date"),)
 
 
+class IndexSectorAllocation(Base):
+    """A dated, immutable-by-date sector snapshot from an official index factsheet."""
+
+    __tablename__ = "index_sector_allocations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    index_name: Mapped[str] = mapped_column(String(32), nullable=False)
+    sector: Mapped[str] = mapped_column(String(200), nullable=False)
+    weight_percent: Mapped[Decimal] = mapped_column(Numeric(7, 4), nullable=False)
+    factsheet_date: Mapped[date] = mapped_column(Date, nullable=False)
+    source_url: Mapped[str] = mapped_column(Text, nullable=False)
+    source_file: Mapped[str] = mapped_column(String(255), nullable=False)
+    row_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("index_name", "sector", "factsheet_date", name="uq_index_sector_allocation_snapshot"),
+        CheckConstraint("index_name in ('NIFTY50', 'NIFTYMIDCAP150', 'NIFTY500')", name="ck_index_sector_allocation_index"),
+        CheckConstraint("weight_percent >= 0 and weight_percent <= 100", name="ck_index_sector_allocation_weight"),
+        Index("ix_index_sector_allocations_latest", "index_name", "factsheet_date"),
+    )
+
+
+class IngestionRun(Base):
+    """Observable status and counts for every sector-factsheet ingestion attempt."""
+
+    __tablename__ = "ingestion_runs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    source: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    method_used: Mapped[Optional[str]] = mapped_column(String(32))
+    records_fetched: Mapped[int] = mapped_column(nullable=False, default=0)
+    inserted: Mapped[int] = mapped_column(nullable=False, default=0)
+    updated: Mapped[int] = mapped_column(nullable=False, default=0)
+    duplicates_skipped: Mapped[int] = mapped_column(nullable=False, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+
+
 class ClientOnboarding(Base):
     """Tokenized client-information invitation and its submitted form."""
 
@@ -147,6 +174,17 @@ class UserAccount(Base):
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
+report_number_seq = Sequence("portfolio_report_number_seq", start=1, metadata=Base.metadata)
+
+
+def format_report_number(number: int | None) -> str | None:
+    """Render a sequential report number as the client-facing code, e.g. JBV-GA-001."""
+
+    if number is None:
+        return None
+    return f"JBV-GA-{number:03d}"
+
+
 class PortfolioRun(Base):
     """Persistent ownership and summary metadata for an analysis artifact."""
 
@@ -162,6 +200,7 @@ class PortfolioRun(Base):
     filename: Mapped[str] = mapped_column(String(500), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="uploaded")
     summary: Mapped[Optional[dict]] = mapped_column(JSON)
+    report_number: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -179,4 +218,5 @@ class ReportConfiguration(Base):
     title: Mapped[str] = mapped_column(String(160), nullable=False, default="Portfolio Analysis Report")
     subtitle: Mapped[str] = mapped_column(String(500), nullable=False, default="A complete view of portfolio structure, risk, style, and performance.")
     sections: Mapped[dict] = mapped_column(JSON, nullable=False)
+    benchmarks: Mapped[Optional[dict]] = mapped_column(JSON)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

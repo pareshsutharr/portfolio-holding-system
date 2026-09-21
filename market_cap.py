@@ -87,8 +87,12 @@ def add_market_cap(portfolio_df):
         how="left"
     )
 
+    # "sector" is only present once add_sector_industry() has run (the full analyze()
+    # pipeline runs it first); preview() calls add_market_cap() standalone, before that
+    # step, so fall back to an empty column rather than requiring it here too.
+    sector_column = portfolio_df["sector"] if "sector" in portfolio_df else pd.Series("", index=portfolio_df.index)
     is_etf = (
-        portfolio_df["sector"].astype(str).str.upper().eq("ETF")
+        sector_column.astype(str).str.upper().eq("ETF")
         | portfolio_df["security_name"].astype(str).str.contains(
             r"\bETF\b|GOLD\s*BEES|NETF(?:GOLD|SILVER)",
             case=False,

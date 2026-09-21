@@ -13,6 +13,7 @@ import {
   Menu,
   Settings,
   SlidersHorizontal,
+  PieChart,
   Sparkles,
   TrendingUp,
   UserRound,
@@ -121,6 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <CollapsibleContent className="flex flex-col gap-1">
               {auth.user?.role === "admin" && <NavItem item={{ label: "Clients", icon: <Users size={18} />, href: "/clients" }} active={!!isActive("/clients")} />}
               {auth.user?.role === "admin" && <NavItem item={{ label: "Report customizer", icon: <SlidersHorizontal size={18} />, href: "/report-customizer" }} active={!!isActive("/report-customizer")} />}
+              {auth.user?.role === "admin" && <NavItem item={{ label: "Sector allocations", icon: <PieChart size={18} />, href: "/admin/sector-allocations" }} active={!!isActive("/admin/sector-allocations")} />}
               {workspaceNav.filter(item => auth.user?.role === "admin" || !["Data center", "Data health"].includes(item.label)).map((item) => (
                 <NavItem key={item.label} item={item} active={!!isActive(item.href)} />
               ))}

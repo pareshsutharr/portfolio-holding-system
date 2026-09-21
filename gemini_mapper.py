@@ -31,6 +31,16 @@ HEADER_ALIASES = {
         "current value",
         "valuation",
     ),
+    # Optional: used to compute closing_value when that column is present
+    # but left blank (e.g. an unfilled formula column in the statement).
+    "closing_price": (
+        "closing price",
+        "ltp",
+        "last traded price",
+        "current price",
+        "market price",
+        "cmp",
+    ),
 }
 
 
@@ -121,7 +131,7 @@ def validate_mapping(mapping):
 
 def get_column_mapping(headers):
     local_mapping = get_local_mapping(headers)
-    if all(local_mapping.values()):
+    if all(local_mapping.get(field) for field in STANDARD_FIELDS):
         print("\n========== COLUMN MAPPING (LOCAL) ==========\n")
         print(json.dumps(local_mapping, indent=4))
         return local_mapping
@@ -155,8 +165,9 @@ def get_column_mapping(headers):
         mapping = json.loads(clean_text)
 
         validate_mapping(mapping)
+        mapping.setdefault("closing_price", local_mapping.get("closing_price"))
     except (requests.RequestException, KeyError, TypeError, json.JSONDecodeError) as exc:
-        missing = [field for field, header in local_mapping.items() if header is None]
+        missing = [field for field in STANDARD_FIELDS if not local_mapping.get(field)]
         raise RuntimeError(
             "Could not map required portfolio columns. "
             f"Missing local matches for: {', '.join(missing)}; "

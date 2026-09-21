@@ -1,20 +1,17 @@
-"""Loads the Accord Growth / Value / Quality / Liquidity workbooks into
-per-ISIN raw metric tables used by the Stock Style Classification module.
+"""Loads the Accord master workbook (Growth / Value / Quality / Liquidity raw
+inputs) into per-ISIN raw metric tables used by the Stock Style
+Classification module. Quality's Debt/Equity ratio is not in the master
+export, so it's still read from the legacy Data_Quality.xlsx workbook.
 
 Each workbook has 3 blank rows before the header, so header=3 (0-indexed).
-The 6 yearly columns for a metric are named "<Metric>", "<Metric>1" ...
-"<Metric>5", ordered most-recent-year first.
+The 5 yearly columns for a metric are named "<Metric>", "<Metric>1" ...
+"<Metric>4", ordered most-recent-year first.
 """
 
 import numpy as np
 import pandas as pd
 
-from config import (
-    STYLE_GROWTH_FILE,
-    STYLE_LIQUIDITY_FILE,
-    STYLE_QUALITY_FILE,
-    STYLE_VALUE_FILE,
-)
+from config import STYLE_ACCORD_MASTER_FILE, STYLE_QUALITY_FILE
 
 ACCORD_HEADER_ROW = 3
 ISIN_COLUMN = "CD_ISIN No"
@@ -32,16 +29,17 @@ def _year_columns(base, count):
     return [base] + [f"{base}{i}" for i in range(1, count)]
 
 
-def _geometric_growth(df, base, years=5):
-    """Compound `years` yearly growth-% columns (most-recent-first) into a
-    single multi-year compounded growth rate, expressed as a fraction."""
-    columns = _year_columns(base, years)
+def _true_cagr(df, base, years=4):
+    """CAGR from `years + 1` raw yearly level columns (most-recent-first):
+    (latest / oldest) ** (1 / years) - 1. N/A whenever any year in the
+    window is missing, zero, or negative."""
+    columns = _year_columns(base, years + 1)
     values = df[columns].apply(pd.to_numeric, errors="coerce")
-    factors = 1 + values / 100.0
-    invalid = values.isna().any(axis=1) | (factors <= 0).any(axis=1)
-    compounded = factors.prod(axis=1) ** (1 / years) - 1
-    compounded[invalid] = np.nan
-    return compounded
+    invalid = values.isna().any(axis=1) | (values <= 0).any(axis=1)
+    latest, oldest = values[columns[0]], values[columns[-1]]
+    cagr = (latest / oldest) ** (1 / years) - 1
+    cagr[invalid] = np.nan
+    return cagr
 
 
 def _average_percent(df, base, years=5):
@@ -51,20 +49,20 @@ def _average_percent(df, base, years=5):
 
 
 def load_growth_universe():
-    df = _read_accord_sheet(STYLE_GROWTH_FILE)
+    df = _read_accord_sheet(STYLE_ACCORD_MASTER_FILE)
 
     result = pd.DataFrame(index=df.index)
     result["company_name"] = df[NAME_COLUMN]
-    result["revenue_cagr5"] = _geometric_growth(df, "FR_Net Sales Growth(%)")
-    result["pat_cagr5"] = _geometric_growth(df, "FR_PAT Growth(%)")
-    result["eps_cagr5"] = _geometric_growth(df, "FR_Adj. EPS Growth(%)")
+    result["revenue_cagr5"] = _true_cagr(df, "YR_Net Sales")
+    result["pat_cagr5"] = _true_cagr(df, "FH_PAT")
+    result["eps_cagr5"] = _true_cagr(df, "YR_Adj Calculated EPS Annualised (Unit.Curr.)")
     result["roe_avg5"] = _average_percent(df, "FR_ROE (%)")
     result["roce_avg5"] = _average_percent(df, "FR_ROCE (%)")
     return result
 
 
 def load_value_universe():
-    df = _read_accord_sheet(STYLE_VALUE_FILE)
+    df = _read_accord_sheet(STYLE_ACCORD_MASTER_FILE)
 
     def _clean_multiple(column):
         values = pd.to_numeric(df[column], errors="coerce")
@@ -80,34 +78,26 @@ def load_value_universe():
 
 
 def load_quality_universe():
-    df = _read_accord_sheet(STYLE_QUALITY_FILE)
+    df = _read_accord_sheet(STYLE_ACCORD_MASTER_FILE)
+    # Debt/Equity isn't in the Accord master export; keep sourcing it from
+    # the legacy workbook until that column is added upstream.
+    legacy = _read_accord_sheet(STYLE_QUALITY_FILE)
+    debt_equity = pd.to_numeric(legacy["FR_Total Debt/Equity(x)"], errors="coerce")
 
     result = pd.DataFrame(index=df.index)
     result["company_name"] = df[NAME_COLUMN]
     result["roe_latest"] = pd.to_numeric(df["FR_ROE (%)"], errors="coerce") / 100.0
     result["roce_latest"] = pd.to_numeric(df["FR_ROCE (%)"], errors="coerce") / 100.0
-    result["debt_equity_latest"] = pd.to_numeric(df["FR_Total Debt/Equity(x)"], errors="coerce")
+    result["debt_equity_latest"] = debt_equity.reindex(result.index)
     result["interest_cover_latest"] = pd.to_numeric(df["FR_Interest Cover(x)"], errors="coerce")
     return result
 
 
 def load_liquidity_universe():
-    df = _read_accord_sheet(STYLE_LIQUIDITY_FILE)
-
-    bse_volume = pd.to_numeric(df["DQRYAvg Volume(000) BSE"], errors="coerce")
-    nse_volume = pd.to_numeric(df["DQRYAvg Volume  (000) NSE"], errors="coerce")
-    bse_value = pd.to_numeric(df["DQRYAvg Value BSE"], errors="coerce")
-    nse_value = pd.to_numeric(df["DQRYAvg Value NSE"], errors="coerce")
+    df = _read_accord_sheet(STYLE_ACCORD_MASTER_FILE)
 
     result = pd.DataFrame(index=df.index)
     result["company_name"] = df[NAME_COLUMN]
-    result["adv"] = _combine_optional(bse_volume, nse_volume)
-    result["adt"] = _combine_optional(bse_value, nse_value)
+    result["adv"] = pd.to_numeric(df["DQRY_Avg Volume  ('000)"], errors="coerce")
+    result["adt"] = pd.to_numeric(df["DQRY_Avg Value"], errors="coerce")
     return result
-
-
-def _combine_optional(a, b):
-    both_missing = a.isna() & b.isna()
-    combined = a.fillna(0) + b.fillna(0)
-    combined[both_missing] = np.nan
-    return combined

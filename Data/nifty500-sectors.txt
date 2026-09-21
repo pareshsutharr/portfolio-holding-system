@@ -1,0 +1,22 @@
+Sector Representation
+Sector Weight(%)
+Financial Services 31.01
+Automobile and Auto Components 7.54
+Healthcare 7.29
+Oil, Gas & Consumable Fuels 6.99
+Capital Goods 6.99
+Information Technology 6.41
+Fast Moving Consumer Goods 5.45
+Metals & Mining 3.94
+Consumer Services 3.86
+Telecommunication 3.75
+Power 3.50
+Consumer Durables 2.95
+Construction 2.74
+Services 2.03
+Chemicals 2.01
+Construction Materials 1.93
+Realty 1.13
+Textiles 0.26
+Media, Entertainment & Publication 0.15
+Diversified 0.10

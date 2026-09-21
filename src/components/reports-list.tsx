@@ -15,7 +15,8 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { authFetch, downloadAuthorized } from "@/lib/auth";
+import { authFetch } from "@/lib/auth";
+import { ReportDownloadDialog } from "@/components/report-download-dialog";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL
   ?? (process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000" : "");
@@ -30,6 +31,7 @@ type AnalysisStatus = {
   holdings?: number;
   risk_score?: number;
   risk_level?: string;
+  report_number?: string | null;
   error?: string;
 };
 
@@ -57,6 +59,7 @@ export function ReportsList() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [downloadRunId, setDownloadRunId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,7 +149,14 @@ export function ReportsList() {
                 <FileBarChart size={18} />
               </div>
               <div className="min-w-0">
-                <strong className="block truncate text-[12px] text-[#173337]">{run.filename}</strong>
+                <div className="flex items-center gap-2">
+                  <strong className="truncate text-[12px] text-[#173337]">{run.filename}</strong>
+                  {run.report_number && (
+                    <span className="shrink-0 rounded-full bg-[#ecf4f3] px-2 py-0.5 font-mono text-[9px] font-bold tracking-wide text-[#2a655e]">
+                      {run.report_number}
+                    </span>
+                  )}
+                </div>
                 <span className="mt-1 flex items-center gap-1 text-[10px] text-[#84908c]">
                   <Clock size={11} /> {formatDate(run.created_at)}
                 </span>
@@ -172,7 +182,7 @@ export function ReportsList() {
                         View <ArrowRight size={14} />
                       </Link>
                     </Button>
-                    <Button size="icon-sm" variant="outline" aria-label="Download PDF report" onClick={() => downloadAuthorized(`/api/analyses/${run.id}/report`, `portfolio-${run.id.slice(0, 8)}.pdf`)}>
+                    <Button size="icon-sm" variant="outline" aria-label="Choose and download PDF report" onClick={() => setDownloadRunId(run.id)}>
                         <Download size={15} />
                     </Button>
                   </>
@@ -188,6 +198,7 @@ export function ReportsList() {
           Showing {data.recent_analyses.length} most recent of {data.total_analyses} total analyses.
         </p>
       )}
+      <ReportDownloadDialog runId={downloadRunId} open={!!downloadRunId} onOpenChange={open => { if (!open) setDownloadRunId(null); }} />
     </div>
   );
 }

@@ -12,19 +12,26 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.lib.units import inch
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen import canvas
 from xml.sax.saxutils import escape
 import os
+from datetime import date as date_cls
 from pathlib import Path
 
 from riskometer_report import build_riskometer_story
 from stock_style_report import build_style_story
-from portfolio_returns_report import build_returns_story
+from portfolio_disparity_report import build_disparity_story
 
 
 class NumberedCanvas(canvas.Canvas):
-    def __init__(self, *args, **kwargs):
+    logo_path = Path(__file__).resolve().parent / "public" / "logo.png"
+
+    HEADER_HEIGHT_RATIO = 0.10
+    FOOTER_HEIGHT_RATIO = 0.10
+
+    def __init__(self, *args, report_number=None, **kwargs):
+        self.report_number = report_number
         super().__init__(*args, **kwargs)
         self._saved_page_states = []
 
@@ -34,19 +41,58 @@ class NumberedCanvas(canvas.Canvas):
 
     def save(self):
         total_pages = len(self._saved_page_states)
-        for state in self._saved_page_states:
+        for page_number, state in enumerate(self._saved_page_states, start=1):
             self.__dict__.update(state)
-            self.draw_page_footer(total_pages)
+            self._pageNumber = page_number
+            self.draw_page_chrome(total_pages, page_number)
             super().showPage()
         super().save()
 
-    def draw_page_footer(self, page_count):
-        self.setStrokeColor(colors.HexColor("#D9E2EC"))
-        self.line(30, 25, 565, 25)
-        self.setFont("Helvetica", 8)
-        self.setFillColor(colors.HexColor("#6B7280"))
-        self.drawString(30, 12, "Portfolio Analysis Report")
-        self.drawRightString(565, 12, f"Page {self._pageNumber} of {page_count}")
+    def draw_page_chrome(self, page_count, page_number):
+        width, height = self._pagesize
+        header_height = height * self.HEADER_HEIGHT_RATIO
+        footer_height = height * self.FOOTER_HEIGHT_RATIO
+        self.saveState()
+        self.resetTransforms()
+
+        # Header band (10% of page height): logo left, report number right.
+        self.setFillColor(colors.white)
+        self.rect(0, height - header_height, width, header_height, fill=1, stroke=0)
+        if self.logo_path.exists():
+            logo_height = header_height * 0.5
+            self.drawImage(
+                str(self.logo_path),
+                30,
+                height - header_height + (header_height - logo_height) / 2,
+                width=logo_height * 3.9,
+                height=logo_height,
+                preserveAspectRatio=True,
+                anchor="w",
+                mask="auto",
+            )
+        report_number = self.report_number or "—"
+        self.setFont("Helvetica", 7)
+        self.setFillColor(colors.HexColor("#64748B"))
+        self.drawRightString(width - 30, height - header_height / 2 + 6, "REPORT NUMBER")
+        self.setFont("Helvetica-Bold", 11)
+        self.setFillColor(colors.HexColor("#123A63"))
+        self.drawRightString(width - 30, height - header_height / 2 - 8, report_number)
+        self.setStrokeColor(colors.HexColor("#DCE6EB"))
+        self.line(30, height - header_height, width - 30, height - header_height)
+
+        # Footer band (10% of page height): brand line left, page count right.
+        self.setFillColor(colors.white)
+        self.rect(0, 0, width, footer_height, fill=1, stroke=0)
+        self.setStrokeColor(colors.HexColor("#DCE6EB"))
+        self.line(30, footer_height, width - 30, footer_height)
+        self.setFont("Helvetica-Bold", 7.5)
+        self.setFillColor(colors.HexColor("#123A63"))
+        self.drawString(30, footer_height / 2 - 2, "Growth Avenues | Portfolio Analysis Report")
+        self.setFont("Helvetica", 7)
+        self.setFillColor(colors.HexColor("#64748B"))
+        self.drawCentredString(width / 2, footer_height / 2 - 2, report_number)
+        self.drawRightString(width - 30, footer_height / 2 - 2, f"Page {page_number:02d} / {page_count:02d}")
+        self.restoreState()
 
 
 class PortfolioPDF:
@@ -56,7 +102,7 @@ class PortfolioPDF:
         chart_paths,
         risk_analysis=None,
         style_analysis=None,
-        returns_analysis=None,
+        disparity_analysis=None,
         output_path="output/portfolio_report.pdf",
         report_options=None,
     ):
@@ -64,36 +110,45 @@ class PortfolioPDF:
         self.chart_paths = chart_paths
         self.risk_analysis = risk_analysis
         self.style_analysis = style_analysis
-        self.returns_analysis = returns_analysis
+        self.disparity_analysis = disparity_analysis
         self.report_options = report_options or {}
         self.enabled_sections = self.report_options.get("sections", {})
+        self.report_number = self.report_options.get("report_number")
+        self.enabled_benchmarks = self.report_options.get("benchmarks", {})
 
         self.portfolio = analysis["portfolio"]
         self.summary = analysis["summary"]
         self.sector = analysis["sector"]
         self.industry = analysis["industry"]
         self.market_cap = analysis["market_cap"]
-        self.benchmarks = analysis["benchmarks"]
+        self.benchmarks = {
+            key: data for key, data in analysis["benchmarks"].items()
+            if self.enabled_benchmarks.get(data["name"], True)
+        }
 
         self.elements = []
 
+        page_width, page_height = landscape(A4)
+        header_height = page_height * NumberedCanvas.HEADER_HEIGHT_RATIO
+        footer_height = page_height * NumberedCanvas.FOOTER_HEIGHT_RATIO
+
         self.doc = SimpleDocTemplate(
             str(output_path),
-            pagesize=A4,
-            rightMargin=28,
-            leftMargin=28,
-            topMargin=30,
-            bottomMargin=35
+            pagesize=landscape(A4),
+            rightMargin=34,
+            leftMargin=34,
+            topMargin=header_height + 14,
+            bottomMargin=footer_height + 14
         )
 
         self.styles = getSampleStyleSheet()
         self._build_styles()
 
-        self.primary = colors.HexColor("#0F172A")
-        self.secondary = colors.HexColor("#1D4ED8")
-        self.accent = colors.HexColor("#E8F0FE")
-        self.light_bg = colors.HexColor("#F8FAFC")
-        self.border = colors.HexColor("#D9E2EC")
+        self.primary = colors.HexColor("#123A63")
+        self.secondary = colors.HexColor("#0E8290")
+        self.accent = colors.HexColor("#E6F4F2")
+        self.light_bg = colors.HexColor("#F5F9F8")
+        self.border = colors.HexColor("#DCE6EB")
         self.text_muted = colors.HexColor("#475569")
         self.success = colors.HexColor("#16A34A")
         self.danger = colors.HexColor("#DC2626")
@@ -103,9 +158,9 @@ class PortfolioPDF:
             "CustomTitle",
             parent=self.styles["Title"],
             fontName="Helvetica-Bold",
-            fontSize=24,
-            leading=30,
-            alignment=TA_CENTER,
+            fontSize=29,
+            leading=35,
+            alignment=TA_LEFT,
             textColor=colors.white,
             spaceAfter=10
         )
@@ -116,18 +171,18 @@ class PortfolioPDF:
             fontName="Helvetica",
             fontSize=11,
             leading=16,
-            alignment=TA_CENTER,
-            textColor=colors.white
+            alignment=TA_LEFT,
+            textColor=colors.HexColor("#D6E8EE")
         )
 
         self.heading_style = ParagraphStyle(
             "CustomHeading",
             parent=self.styles["Heading1"],
             fontName="Helvetica-Bold",
-            fontSize=16,
-            leading=22,
+            fontSize=17,
+            leading=21,
             alignment=TA_LEFT,
-            textColor=colors.HexColor("#0F172A"),
+            textColor=colors.HexColor("#123A63"),
             spaceAfter=8
         )
 
@@ -138,7 +193,7 @@ class PortfolioPDF:
             fontSize=11,
             leading=14,
             alignment=TA_LEFT,
-            textColor=colors.HexColor("#1E3A8A")
+            textColor=colors.HexColor("#0E8290")
         )
 
         self.normal_style = ParagraphStyle(
@@ -238,6 +293,45 @@ class PortfolioPDF:
 
         return container
 
+    def _two_column_slide(self, left, image_path, *, image_width=370, image_height=270):
+        chart = self._safe_image(image_path, image_width, image_height)
+        layout = Table([[left, chart]], colWidths=[self.doc.width * 0.50, self.doc.width * 0.47], hAlign="LEFT")
+        layout.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (0, 0), 0),
+            ("RIGHTPADDING", (0, 0), (0, 0), 14),
+            ("LEFTPADDING", (1, 0), (1, 0), 10),
+            ("RIGHTPADDING", (1, 0), (1, 0), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        return layout
+
+    def _two_column_table_width(self):
+        # Matches the left cell of _two_column_slide (50% of doc.width, minus its 14pt right padding).
+        return self.doc.width * 0.50 - 14
+
+    def _ensure_page_break(self):
+        # Avoids stacking two consecutive PageBreaks (which renders as a blank page) when a
+        # section that always ends with its own break is immediately followed by one that
+        # starts with its own leading break.
+        if self.elements and not isinstance(self.elements[-1], PageBreak):
+            self.elements.append(PageBreak())
+
+    def _report_dates_caption(self):
+        report_generated_text = date_cls.today().strftime("%d %b %Y")
+        caption = f"Report generated: {report_generated_text}"
+
+        market_data_date = self.summary.get("market_data_date")
+        if market_data_date:
+            try:
+                market_data_text = date_cls.fromisoformat(str(market_data_date)).strftime("%d %b %Y")
+            except ValueError:
+                market_data_text = str(market_data_date)
+            caption += f"  &middot;  Market data as of: {market_data_text}"
+
+        return caption
+
     def _table_cell(self, value, style=None):
 
         if style is None:
@@ -251,7 +345,8 @@ class PortfolioPDF:
         )
 
     def _section_title(self, title, subtitle=None):
-        items = [Paragraph(title, self.heading_style), Spacer(1, 4)]
+        kicker = Paragraph("PORTFOLIO ANALYSIS", ParagraphStyle("Kicker", parent=self.small_style, fontName="Helvetica-Bold", fontSize=7, textColor=colors.HexColor("#0E8290"), spaceAfter=2))
+        items = [kicker, Paragraph(title, self.heading_style), Spacer(1, 2)]
         if subtitle:
             items.append(Paragraph(subtitle, self.small_style))
             items.append(Spacer(1, 10))
@@ -264,13 +359,11 @@ class PortfolioPDF:
 
         data = [
             [
-                Paragraph("<b>Total Value</b><br/>Rs. {:,.2f}".format(self.summary["total_portfolio_value"]), self.normal_style),
-                Paragraph("<b>Total Holdings</b><br/>{}".format(self.summary["total_holdings"]), self.normal_style),
-                Paragraph("<b>Total Sectors</b><br/>{}".format(self.summary["total_sectors"]), self.normal_style),
-            ],
-            [
-                Paragraph("<b>Total Industries</b><br/>{}".format(self.summary["total_industries"]), self.normal_style),
-                Paragraph("<b>Diversification</b><br/>{}".format(self.summary["diversification"]), self.normal_style),
+                Paragraph("<b>Total Value</b><br/><font size='14'>Rs. {:,.0f}</font>".format(self.summary["total_portfolio_value"]), self.normal_style),
+                Paragraph("<b>Holdings</b><br/><font size='14'>{}</font>".format(self.summary["total_holdings"]), self.normal_style),
+                Paragraph("<b>Sectors</b><br/><font size='14'>{}</font>".format(self.summary["total_sectors"]), self.normal_style),
+                Paragraph("<b>Industries</b><br/><font size='14'>{}</font>".format(self.summary["total_industries"]), self.normal_style),
+                Paragraph("<b>Diversification</b><br/><font size='14'>{}</font>".format(self.summary["diversification"]), self.normal_style),
                 Paragraph(
                     "<b>Concentration Risk</b><br/><font color='{}'>{}</font>".format(
                         risk_color.hexval().replace("0x", "#"),
@@ -278,14 +371,24 @@ class PortfolioPDF:
                     ),
                     self.normal_style
                 ),
-            ]
+            ],
+            [
+                Paragraph("<b>Largest Sector</b><br/><font size='14'>{} ({}%)</font>".format(escape(str(self.summary["largest_sector"])), self.summary["largest_sector_weight"]), self.normal_style),
+                "",
+                Paragraph("<b>Largest Industry</b><br/><font size='14'>{} ({}%)</font>".format(escape(str(self.summary["largest_industry"])), self.summary["largest_industry_weight"]), self.normal_style),
+                "",
+                Paragraph("<b>Top 2 Holdings</b><br/><font size='14'>{:.2f}%</font>".format(self.summary["top2_weight"]), self.normal_style),
+                Paragraph("<b>Top 5 Holdings</b><br/><font size='14'>{:.2f}%</font>".format(self.summary["top5_weight"]), self.normal_style),
+            ],
         ]
 
-        table = Table(data, colWidths=[170, 170, 170], rowHeights=[60, 60])
+        table = Table(data, colWidths=[self.doc.width / 6] * 6, rowHeights=[68, 68])
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), colors.white),
             ("BOX", (0, 0), (-1, -1), 0.8, self.border),
-            ("INNERGRID", (0, 0), (-1, -1), 0.8, self.border),
+            ("INNERGRID", (0, 0), (-1, -1), 0.6, self.border),
+            ("SPAN", (0, 1), (1, 1)),
+            ("SPAN", (2, 1), (3, 1)),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("LEFTPADDING", (0, 0), (-1, -1), 12),
             ("RIGHTPADDING", (0, 0), (-1, -1), 12),
@@ -311,8 +414,8 @@ class PortfolioPDF:
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
             ("LEFTPADDING", (0, 0), (-1, -1), 6),
             ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING", (0, 1), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 1), (-1, -1), 6),
+            ("TOPPADDING", (0, 1), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
         ]
 
         if alignments:
@@ -325,34 +428,26 @@ class PortfolioPDF:
         return table
 
     def add_cover_page(self):
-        cover_data = [[
-            Paragraph(escape(self.report_options.get("title", "Portfolio Analysis Report")), self.title_style)
-        ]]
-
-        cover = Table(cover_data, colWidths=[530], rowHeights=[120])
+        title = Paragraph(escape(self.report_options.get("title", "Portfolio Analysis Report")), self.title_style)
+        subtitle = Paragraph(escape(self.report_options.get("subtitle", "A complete view of portfolio structure, risk, style, and performance.")), self.cover_subtitle)
+        cover_data = [[title], [subtitle]]
+        cover = Table(cover_data, colWidths=[self.doc.width], rowHeights=[58, 48])
         cover.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0F172A")),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#123A63")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 32),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 32),
+            ("TOPPADDING", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
         ]))
 
         self.elements.append(cover)
-        self.elements.append(Spacer(1, 30))
-
-        intro = "<para align='center'>{}</para>".format(escape(self.report_options.get("subtitle", "A visually summarized review of portfolio holdings, diversification, allocation mix, and concentration indicators.")))
-        self.elements.append(Paragraph(intro, self.normal_style))
-        self.elements.append(Spacer(1, 30))
+        self.elements.append(Spacer(1, 8))
+        self.elements.append(Paragraph(self._report_dates_caption(), self.small_style))
+        self.elements.append(Spacer(1, 10))
         self.elements.append(self._build_kpi_table())
-        self.elements.append(Spacer(1, 30))
-
-        summary_block = f"""
-        <b>Largest Sector:</b> {self.summary['largest_sector']} ({self.summary['largest_sector_weight']}%)<br/>
-        <b>Largest Industry:</b> {self.summary['largest_industry']} ({self.summary['largest_industry_weight']}%)<br/>
-        <b>Top 2 Holdings Weight:</b> {self.summary['top2_weight']:.2f}%<br/>
-        <b>Top 5 Holdings Weight:</b> {self.summary['top5_weight']:.2f}%
-        """
-        self.elements.append(Paragraph(summary_block, self.normal_style))
-        self.elements.append(PageBreak())
+        self._ensure_page_break()
 
     def add_holdings_table(self):
         self.elements.extend(self._section_title(
@@ -401,17 +496,7 @@ class PortfolioPDF:
                 )
             ])
 
-        col_widths = [
-            70,
-            90,
-            50,
-            75,
-            80,
-            34,
-            42,
-            58,
-            40
-        ]
+        col_widths = [82, 120, 52, 100, 105, 45, 52, 75, 50]
 
         table = self._styled_table(
             data,
@@ -432,7 +517,7 @@ class PortfolioPDF:
         )
 
         self.elements.append(table)
-        self.elements.append(PageBreak())
+        self._ensure_page_break()
 
     def add_sector_page(self):
         self.elements.extend(self._section_title(
@@ -448,23 +533,16 @@ class PortfolioPDF:
                 f"{row['allocation_percent']:.2f}%"
             ])
 
+        available = self._two_column_table_width()
         table = self._styled_table(
             table_data,
-            col_widths=[220, 150, 120],
+            col_widths=[available * 0.45, available * 0.30, available * 0.25],
             font_size=8,
             alignments={0: "LEFT", 1: "RIGHT", 2: "RIGHT"}
         )
 
-        self.elements.append(KeepTogether([
-            table,
-            Spacer(1, 18),
-            self._centered_image(
-                self.chart_paths.get("sector_donut"),
-                5.8 * inch,
-                4.22 * inch
-            )
-        ]))
-        self.elements.append(PageBreak())
+        self.elements.append(self._two_column_slide(table, self.chart_paths.get("sector_donut")))
+        self._ensure_page_break()
 
     def add_industry_page(self):
         self.elements.extend(self._section_title(
@@ -480,23 +558,27 @@ class PortfolioPDF:
                 f"{row['allocation_percent']:.2f}%"
             ])
 
-        table = self._styled_table(
-            table_data,
-            col_widths=[220, 150, 120],
-            font_size=8,
-            alignments={0: "LEFT", 1: "RIGHT", 2: "RIGHT"}
-        )
-
-        self.elements.append(KeepTogether([
-            table,
-            Spacer(1, 18),
-            self._centered_image(
-                self.chart_paths.get("industry_donut"),
-                5.8 * inch,
-                4.22 * inch
+        if len(table_data) <= 18:
+            available = self._two_column_table_width()
+            table = self._styled_table(
+                table_data,
+                col_widths=[available * 0.45, available * 0.30, available * 0.25],
+                font_size=8,
+                alignments={0: "LEFT", 1: "RIGHT", 2: "RIGHT"}
             )
-        ]))
-        self.elements.append(PageBreak())
+            self.elements.append(self._two_column_slide(table, self.chart_paths.get("industry_donut")))
+        else:
+            table = self._styled_table(
+                table_data,
+                col_widths=[self.doc.width * 0.45, self.doc.width * 0.30, self.doc.width * 0.25],
+                font_size=8,
+                alignments={0: "LEFT", 1: "RIGHT", 2: "RIGHT"}
+            )
+            self.elements.append(table)
+            self._ensure_page_break()
+            self.elements.extend(self._section_title("Industry Allocation - Visual", "Portfolio exposure across industries."))
+            self.elements.append(self._centered_image(self.chart_paths.get("industry_donut"), 7.1 * inch, 4.65 * inch))
+        self._ensure_page_break()
 
     def add_market_cap_page(self):
         self.elements.extend(self._section_title(
@@ -512,23 +594,16 @@ class PortfolioPDF:
                 f"{row['allocation_percent']:.2f}%"
             ])
 
+        available = self._two_column_table_width()
         table = self._styled_table(
             table_data,
-            col_widths=[220, 150, 120],
+            col_widths=[available * 0.45, available * 0.30, available * 0.25],
             font_size=8,
             alignments={0: "LEFT", 1: "RIGHT", 2: "RIGHT"}
         )
 
-        self.elements.append(KeepTogether([
-            table,
-            Spacer(1, 18),
-            self._centered_image(
-                self.chart_paths.get("market_cap_donut"),
-                5.8 * inch,
-                4.22 * inch
-            )
-        ]))
-        self.elements.append(PageBreak())
+        self.elements.append(self._two_column_slide(table, self.chart_paths.get("market_cap_donut")))
+        self._ensure_page_break()
 
     def add_top_holdings_page(self):
         self.elements.extend(self._section_title(
@@ -546,23 +621,16 @@ class PortfolioPDF:
                 f"{row['value']:,.2f}"
             ])
 
+        available = self._two_column_table_width()
         table = self._styled_table(
             table_data,
-            col_widths=[290, 100, 100],
+            col_widths=[available * 0.58, available * 0.21, available * 0.21],
             font_size=8,
             alignments={0: "LEFT", 1: "RIGHT", 2: "RIGHT"}
         )
 
-        self.elements.append(KeepTogether([
-            table,
-            Spacer(1, 18),
-            self._centered_image(
-                self.chart_paths.get("top_holdings"),
-                6.5 * inch,
-                4 * inch
-            )
-        ]))
-        self.elements.append(PageBreak())
+        self.elements.append(self._two_column_slide(table, self.chart_paths.get("top_holdings"), image_width=365, image_height=245))
+        self._ensure_page_break()
 
 
     def add_benchmark_page(
@@ -573,84 +641,20 @@ class PortfolioPDF:
 
         benchmark_name = benchmark_data["name"]
 
-        comparison = benchmark_data["comparison"].copy()
-
         self.elements.extend(
             self._section_title(
-                f"Benchmark Comparison ({benchmark_name})",
-                f"Comparison of sector allocation against the {benchmark_name} benchmark."
+                f"{benchmark_name} vs Client Sector Allocation",
+                "Visual comparison with percentage labels for every non-zero sector allocation."
             )
         )
 
-        table_data = [[
-            "Sector",
-            f"{benchmark_name} %",
-            "Portfolio %",
-            "Difference"
-        ]]
+        left_chart = self._safe_image(self.chart_paths.get(f"{benchmark_key}_sector_donut_comparison"), 370, 270)
+        right_chart = self._safe_image(self.chart_paths.get(f"{benchmark_key}_vs_client"), 370, 270)
+        charts = Table([[left_chart, right_chart]], colWidths=[self.doc.width / 2] * 2)
+        charts.setStyle(TableStyle([("VALIGN", (0,0),(-1,-1), "MIDDLE"), ("ALIGN",(0,0),(-1,-1),"CENTER"), ("LEFTPADDING",(0,0),(-1,-1),0), ("RIGHTPADDING",(0,0),(-1,-1),0)]))
+        self.elements.append(charts)
 
-        for _, row in comparison.iterrows():
-
-            diff = row["difference"]
-
-            if diff > 0:
-                diff_text = f"+{diff:.2f}%"
-            else:
-                diff_text = f"{diff:.2f}%"
-
-            table_data.append([
-                str(row["sector"]),
-                f"{row['benchmark_weight']:.2f}%",
-                f"{row['client_weight']:.2f}%",
-                diff_text
-            ])
-
-        table = self._styled_table(
-            table_data,
-            col_widths=[220, 90, 90, 90],
-            font_size=8,
-            alignments={
-                0: "LEFT",
-                1: "RIGHT",
-                2: "RIGHT",
-                3: "RIGHT"
-            }
-        )
-
-        self.elements.append(table)
-
-        self.elements.append(PageBreak())
-
-        self.elements.extend(
-            self._section_title(
-                "Sector Allocation Charts",
-                f"Client portfolio and {benchmark_name} sector allocations shown side by side."
-            )
-        )
-
-        self.elements.append(
-            self._centered_image(
-                self.chart_paths.get(
-                    f"{benchmark_key}_sector_donut_comparison"
-                ),
-                7.2 * inch,
-                4.37 * inch
-            )
-        )
-
-        self.elements.append(Spacer(1, 12))
-
-        self.elements.append(
-            self._centered_image(
-                self.chart_paths.get(
-                    f"{benchmark_key}_vs_client"
-                ),
-                7 * inch,
-                4.31 * inch
-            )
-        )
-
-        self.elements.append(PageBreak())
+        self._ensure_page_break()
 
     def add_benchmark_holdings_page(
         self,
@@ -701,38 +705,7 @@ class PortfolioPDF:
 
         self.elements.append(table)
 
-        self.elements.append(PageBreak())
-
-    def add_insights_page(self):
-        self.elements.extend(self._section_title(
-            "Portfolio Insights",
-            "A quick narrative summary of concentration and diversification indicators."
-        ))
-
-        summary = self.summary
-
-        insights_data = [
-            ["Metric", "Observation"],
-            ["Total Portfolio Value", f"Rs. {summary['total_portfolio_value']:,.2f}"],
-            ["Total Holdings", str(summary["total_holdings"])],
-            ["Total Sectors", str(summary["total_sectors"])],
-            ["Total Industries", str(summary["total_industries"])],
-            ["Largest Sector", f"{summary['largest_sector']} ({summary['largest_sector_weight']}%)"],
-            ["Largest Industry", f"{summary['largest_industry']} ({summary['largest_industry_weight']}%)"],
-            ["Top 2 Holdings Weight", f"{summary['top2_weight']:.2f}%"],
-            ["Top 5 Holdings Weight", f"{summary['top5_weight']:.2f}%"],
-            ["Diversification Score", str(summary["diversification"])],
-            ["Concentration Risk", str(summary["concentration_risk"])],
-        ]
-
-        table = self._styled_table(
-            insights_data,
-            col_widths=[180, 290],
-            font_size=8,
-            alignments={0: "LEFT", 1: "LEFT"}
-        )
-
-        self.elements.append(table)
+        self._ensure_page_break()
 
     def generate(self):
         self.add_cover_page()
@@ -750,24 +723,22 @@ class PortfolioPDF:
                 benchmark_data
             )
 
-            self.add_benchmark_holdings_page(
-                benchmark_data
-            )
-
-        if enabled("insights"): self.add_insights_page()
-
-        if self.returns_analysis and enabled("performance"):
-            self.elements.append(PageBreak())
+        if self.disparity_analysis and enabled("disparity"):
+            self._ensure_page_break()
             self.elements.extend(
-                build_returns_story(
-                    self.returns_analysis,
+                build_disparity_story(
+                    self.disparity_analysis,
                     self.doc.width,
                     Path("output"),
+                    benchmark_names=[
+                        name for name in ("Nifty 50", "Nifty Midcap 150", "Nifty 500")
+                        if self.enabled_benchmarks.get(name, True)
+                    ],
                 )
             )
 
         if self.risk_analysis and enabled("risk"):
-            self.elements.append(PageBreak())
+            self._ensure_page_break()
             self.elements.extend(
                 build_riskometer_story(
                     self.risk_analysis,
@@ -777,7 +748,7 @@ class PortfolioPDF:
             )
 
         if self.style_analysis and enabled("style"):
-            self.elements.append(PageBreak())
+            self._ensure_page_break()
             self.elements.extend(
                 build_style_story(
                     self.style_analysis,
@@ -786,7 +757,13 @@ class PortfolioPDF:
                 )
             )
 
-        self.doc.build(self.elements, canvasmaker=NumberedCanvas)
+        while self.elements and isinstance(self.elements[-1], PageBreak):
+            self.elements.pop()
+
+        self.doc.build(
+            self.elements,
+            canvasmaker=lambda *args, **kwargs: NumberedCanvas(*args, report_number=self.report_number, **kwargs)
+        )
 
         print("\n========== PDF GENERATED ==========\n")
         print("Saved : output/portfolio_report.pdf")

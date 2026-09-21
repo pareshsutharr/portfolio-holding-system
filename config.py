@@ -32,28 +32,20 @@ STYLE_DATA_DIR = os.getenv(
     "/tmp/portfolio-reference-data" if os.getenv("VERCEL") else "Portfolio Analyzer Data",
 )
 
-STYLE_GROWTH_FILE = (
-    f"{STYLE_DATA_DIR}/growth_data/Data_Growth.xlsx"
+# Single Accord export covering Growth, Value, Quality (ROE/ROCE/Interest
+# Cover), and Liquidity raw inputs.
+STYLE_ACCORD_MASTER_FILE = (
+    f"{STYLE_DATA_DIR}/accord_master/Portfolio_Analyzer_v2.xlsx"
     if os.getenv("VERCEL")
-    else f"{STYLE_DATA_DIR}/Data_Growth.xlsx"
+    else f"{STYLE_DATA_DIR}/Portfolio_Analyzer_v2.xlsx"
 )
 
-STYLE_VALUE_FILE = (
-    f"{STYLE_DATA_DIR}/value_data/Data_Value.xlsx"
-    if os.getenv("VERCEL")
-    else f"{STYLE_DATA_DIR}/Data_Value.xlsx"
-)
-
+# Debt/Equity is not present in the Accord master export above, so Quality
+# still reads that one ratio from the legacy workbook.
 STYLE_QUALITY_FILE = (
     f"{STYLE_DATA_DIR}/quality_data/Data_Quality.xlsx"
     if os.getenv("VERCEL")
     else f"{STYLE_DATA_DIR}/Data_Quality.xlsx"
-)
-
-STYLE_LIQUIDITY_FILE = (
-    f"{STYLE_DATA_DIR}/liquidity_data/Data_Liquidity.xlsx"
-    if os.getenv("VERCEL")
-    else f"{STYLE_DATA_DIR}/Data_Liquidity.xlsx"
 )
 
 STYLE_NSE_PRICE_DIR = (

@@ -1,6 +1,44 @@
 import pandas as pd
 
 # =====================================
+# CLEAN AND CONVERT NUMERIC COLUMNS
+# =====================================
+
+def _to_numeric(series):
+
+    cleaned = (
+
+        series
+
+        .astype(str)
+
+        .str.replace(r"[₹,]|Rs\.?", "", regex=True)
+
+        .str.strip()
+
+    )
+
+    # Parenthesized numbers represent negatives, e.g. "(123.45)"
+
+    cleaned = cleaned.str.replace(
+
+        r"^\((.*)\)$",
+
+        r"-\1",
+
+        regex=True
+
+    )
+
+    cleaned = cleaned.replace(
+
+        {"": None, "-": None, "nan": None, "None": None}
+
+    )
+
+    return pd.to_numeric(cleaned, errors="coerce")
+
+# =====================================
 # CREATE STANDARD HOLDINGS DATAFRAME
 # =====================================
 
@@ -59,6 +97,14 @@ def parse_holdings(df, header_row, headers, mapping):
             mapping["closing_value"]
         ]
 
+    # Closing Price (fallback source for Closing Value)
+
+    if mapping.get("closing_price"):
+
+        standard_df["closing_price"] = holdings_df[
+            mapping["closing_price"]
+        ]
+
     # ---------------------------------
     # Clean String Columns
     # ---------------------------------
@@ -87,21 +133,27 @@ def parse_holdings(df, header_row, headers, mapping):
     # Convert Numeric Columns
     # ---------------------------------
 
-    standard_df["quantity"] = pd.to_numeric(
+    standard_df["quantity"] = _to_numeric(standard_df["quantity"])
 
-        standard_df["quantity"],
+    standard_df["closing_value"] = _to_numeric(standard_df["closing_value"])
 
-        errors="coerce"
+    # ---------------------------------
+    # Fill Missing Closing Value From Closing Price
+    # (statements sometimes leave the value column blank
+    # and only populate the per-share closing price)
+    # ---------------------------------
 
-    )
+    if "closing_price" in standard_df.columns:
 
-    standard_df["closing_value"] = pd.to_numeric(
+        closing_price = _to_numeric(standard_df["closing_price"])
 
-        standard_df["closing_value"],
+        computed_value = standard_df["quantity"] * closing_price
 
-        errors="coerce"
+        standard_df["closing_value"] = standard_df["closing_value"].fillna(
+            computed_value
+        )
 
-    )
+        standard_df = standard_df.drop(columns=["closing_price"])
 
     # ---------------------------------
     # Remove Empty ISIN

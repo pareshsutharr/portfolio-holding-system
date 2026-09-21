@@ -194,12 +194,23 @@ def analyze_portfolio(portfolio_df):
         diversification = "Poor"
 
     # =====================================
+    # MARKET DATA DATE
+    # =====================================
+    # The trading date the current market prices are from (most holdings share the
+    # same latest close date; the mode is robust to the odd stale/fallback quote).
+
+    price_dates = portfolio_df["price_as_of"].dropna() if "price_as_of" in portfolio_df else pd.Series(dtype=object)
+    market_data_date = price_dates.mode().iloc[0] if not price_dates.empty else None
+
+    # =====================================
     # SUMMARY
     # =====================================
 
     summary = {
 
         "total_portfolio_value": total_value,
+
+        "market_data_date": market_data_date,
 
         "total_holdings": len(portfolio_df),
 

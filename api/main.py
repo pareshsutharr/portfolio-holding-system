@@ -12,7 +12,7 @@ from io import BytesIO
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
@@ -23,16 +23,17 @@ from sqlalchemy.orm import Session
 
 from market_etl.config import Settings
 from market_etl.database import build_engine
-from market_etl.models import Base, ClientOnboarding, PortfolioRun, ReportConfiguration, UserAccount
+from market_etl.models import Base, ClientOnboarding, PortfolioRun, ReportConfiguration, UserAccount, format_report_number, report_number_seq
 from portfolio_service import PortfolioAnalysisService
 from api.auth import AuthConfigurationError, Principal, hash_password, issue_token, principal_dependency, require_admin, verify_password
 
 from api.data_center import router as data_center_router
+from api.sector_allocations import router as sector_allocations_router
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = Path("/tmp/portfolio-analyses") if os.getenv("VERCEL") else ROOT / "runtime" / "analyses"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
-ALLOWED_SUFFIXES = {".xlsx", ".xls"}
+ALLOWED_SUFFIXES = {".xlsx", ".xls", ".pdf"}
 CLIENT_ENGINE = build_engine(Settings.from_env().database_url)
 Base.metadata.create_all(CLIENT_ENGINE)
 get_principal = principal_dependency(CLIENT_ENGINE)
@@ -58,6 +59,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(data_center_router, dependencies=[Depends(get_admin)])
+app.include_router(sector_allocations_router, dependencies=[Depends(get_admin)])
 
 
 class AnalysisRequest(BaseModel):
@@ -104,11 +106,13 @@ class CompareRequest(BaseModel):
     newer_id: str
 
 
-REPORT_SECTIONS = ("holdings", "sector", "industry", "market_cap", "top_holdings", "benchmarks", "insights", "performance", "risk", "style")
+REPORT_SECTIONS = ("holdings", "sector", "industry", "market_cap", "top_holdings", "benchmarks", "disparity", "risk", "style")
+BENCHMARK_NAMES = ("Nifty 50", "Nifty Midcap 150", "Nifty 500")
 DEFAULT_REPORT_CONFIGURATION = {
     "title": "Portfolio Analysis Report",
     "subtitle": "A complete view of portfolio structure, risk, style, and performance.",
-    "sections": {key: True for key in REPORT_SECTIONS},
+    "sections": {key: key != "top_holdings" for key in REPORT_SECTIONS},
+    "benchmarks": {name: True for name in BENCHMARK_NAMES},
 }
 
 
@@ -116,6 +120,7 @@ class ReportConfigurationRequest(BaseModel):
     title: str = Field(min_length=2, max_length=160)
     subtitle: str = Field(max_length=500)
     sections: dict[str, bool]
+    benchmarks: dict[str, bool] = Field(default_factory=dict)
 
 
 def _report_configuration(owner_id: str) -> dict:
@@ -125,13 +130,28 @@ def _report_configuration(owner_id: str) -> dict:
         source = client_config or global_config
         if not source:
             return {**DEFAULT_REPORT_CONFIGURATION, "scope": "default", "owner_id": owner_id}
-        return {"title": source.title, "subtitle": source.subtitle, "sections": {**DEFAULT_REPORT_CONFIGURATION["sections"], **(source.sections or {})}, "scope": "client" if client_config else "global", "owner_id": owner_id}
+        return {
+            "title": source.title,
+            "subtitle": source.subtitle,
+            "sections": {**DEFAULT_REPORT_CONFIGURATION["sections"], **(source.sections or {})},
+            "benchmarks": {**DEFAULT_REPORT_CONFIGURATION["benchmarks"], **(source.benchmarks or {})},
+            "scope": "client" if client_config else "global",
+            "owner_id": owner_id,
+        }
 
 
 def _configuration_payload(record: ReportConfiguration | None, owner_id: str) -> dict:
     if not record:
         return {**DEFAULT_REPORT_CONFIGURATION, "owner_id": owner_id, "exists": False}
-    return {"owner_id": owner_id, "title": record.title, "subtitle": record.subtitle, "sections": {**DEFAULT_REPORT_CONFIGURATION["sections"], **(record.sections or {})}, "exists": True, "updated_at": record.updated_at}
+    return {
+        "owner_id": owner_id,
+        "title": record.title,
+        "subtitle": record.subtitle,
+        "sections": {**DEFAULT_REPORT_CONFIGURATION["sections"], **(record.sections or {})},
+        "benchmarks": {**DEFAULT_REPORT_CONFIGURATION["benchmarks"], **(record.benchmarks or {})},
+        "exists": True,
+        "updated_at": record.updated_at,
+    }
 
 
 def _user_payload(user: UserAccount) -> dict:
@@ -233,7 +253,11 @@ def list_client_accounts(principal: Principal = Depends(get_admin)) -> dict:
         for user in users:
             runs = session.scalars(select(PortfolioRun).where(PortfolioRun.owner_id == user.id).order_by(PortfolioRun.created_at.desc())).all()
             payload = _user_payload(user)
-            payload.update({"portfolio_count": len(runs), "latest_portfolio": runs[0].summary if runs else None})
+            payload.update({
+                "portfolio_count": len(runs),
+                "latest_portfolio": runs[0].summary if runs else None,
+                "latest_report_number": format_report_number(runs[0].report_number) if runs else None,
+            })
             rows.append(payload)
         return {"clients": rows}
 
@@ -258,6 +282,7 @@ def get_report_configuration(owner_id: str, principal: Principal = Depends(get_a
 def save_report_configuration(owner_id: str, request: ReportConfigurationRequest, principal: Principal = Depends(get_admin)) -> dict:
     target = "__global__" if owner_id == "global" else owner_id
     sections = {key: bool(request.sections.get(key, True)) for key in REPORT_SECTIONS}
+    benchmarks = {name: bool(request.benchmarks.get(name, True)) for name in BENCHMARK_NAMES}
     with Session(CLIENT_ENGINE) as session:
         if target != "__global__":
             client = session.get(UserAccount, target)
@@ -265,9 +290,9 @@ def save_report_configuration(owner_id: str, request: ReportConfigurationRequest
                 raise HTTPException(status_code=404, detail="Client account not found")
         record = session.get(ReportConfiguration, target)
         if record:
-            record.title, record.subtitle, record.sections = request.title.strip(), request.subtitle.strip(), sections
+            record.title, record.subtitle, record.sections, record.benchmarks = request.title.strip(), request.subtitle.strip(), sections, benchmarks
         else:
-            record = ReportConfiguration(owner_id=target, title=request.title.strip(), subtitle=request.subtitle.strip(), sections=sections)
+            record = ReportConfiguration(owner_id=target, title=request.title.strip(), subtitle=request.subtitle.strip(), sections=sections, benchmarks=benchmarks)
             session.add(record)
         session.commit()
         session.refresh(record)
@@ -338,6 +363,7 @@ def dashboard(principal: Principal = Depends(get_principal)) -> dict:
                 "id": record.id, "status": record.status, "filename": record.filename,
                 "created_at": record.created_at, "completed_at": record.completed_at,
                 "owner_id": record.owner_id,
+                "report_number": format_report_number(record.report_number),
             })
             recent.append(payload)
         return {"recent_analyses": recent, "total_analyses": len(records)}
@@ -495,7 +521,7 @@ def submit_client_form(token: str, submission: ClientSubmission) -> dict:
 def preview(file: UploadFile = File(...), principal: Principal = Depends(get_principal)) -> dict:
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
-        raise HTTPException(status_code=415, detail="Upload an Excel .xlsx or .xls file")
+        raise HTTPException(status_code=415, detail="Upload an Excel .xlsx/.xls file or a portfolio statement .pdf file")
     run_id = str(uuid.uuid4())
     run_dir = _run_dir(run_id)
     run_dir.mkdir(parents=True)
@@ -539,9 +565,11 @@ def create_analysis(request: AnalysisRequest, principal: Principal = Depends(get
     with Session(CLIENT_ENGINE) as session:
         record = session.get(PortfolioRun, request.upload_id)
         record.status = "processing"
+        report_number = _assign_report_number(session, record)
         session.commit()
     try:
-        result = PortfolioAnalysisService().analyze(uploads[0], run_dir / "portfolio-report.pdf", _report_configuration(principal.owner.id))
+        configuration = {**_report_configuration(principal.owner.id), "report_number": format_report_number(report_number)}
+        result = PortfolioAnalysisService().analyze(uploads[0], run_dir / "portfolio-report.pdf", configuration)
         _write_json(run_dir / "result.json", result)
         status.update(
             {
@@ -551,6 +579,7 @@ def create_analysis(request: AnalysisRequest, principal: Principal = Depends(get
                 "holdings": result["summary"]["total_holdings"],
                 "risk_score": result["risk"]["overall_score"],
                 "risk_level": result["risk"]["overall_level"],
+                "report_number": format_report_number(report_number),
             }
         )
     except Exception as exc:
@@ -577,6 +606,12 @@ def create_analysis(request: AnalysisRequest, principal: Principal = Depends(get
     return {"status": status, "result": result}
 
 
+def _assign_report_number(session: Session, record: PortfolioRun) -> int:
+    if record.report_number is None:
+        record.report_number = session.scalar(select(report_number_seq.next_value()))
+    return record.report_number
+
+
 def _authorized_run(run_id: str, principal: Principal) -> PortfolioRun:
     with Session(CLIENT_ENGINE) as session:
         record = session.get(PortfolioRun, run_id)
@@ -600,11 +635,27 @@ def get_analysis(run_id: str, principal: Principal = Depends(get_principal)) -> 
 
 
 @app.get("/api/analyses/{run_id}/report")
-def get_report(run_id: str, principal: Principal = Depends(get_principal)) -> FileResponse:
+def get_report(run_id: str, sections: str | None = Query(None), principal: Principal = Depends(get_principal)) -> FileResponse:
     record = _authorized_run(run_id, principal)
     run_dir = _run_dir(run_id)
-    configuration = _report_configuration(record.owner_id)
-    signature = hashlib.sha256(json.dumps(configuration, sort_keys=True, default=str).encode()).hexdigest()[:12]
+    if record.report_number is None:
+        with Session(CLIENT_ENGINE) as session:
+            live_record = session.get(PortfolioRun, run_id)
+            report_number = _assign_report_number(session, live_record)
+            session.commit()
+        record.report_number = report_number
+    report_number = format_report_number(record.report_number)
+    configuration = {**_report_configuration(record.owner_id), "report_number": report_number}
+    if sections is not None:
+        requested = {value.strip() for value in sections.split(",") if value.strip()}
+        unknown = requested.difference(REPORT_SECTIONS)
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"Unknown report sections: {', '.join(sorted(unknown))}")
+        if not requested:
+            raise HTTPException(status_code=422, detail="Select at least one report section")
+        configuration = {**configuration, "sections": {key: key in requested for key in REPORT_SECTIONS}}
+    signature_payload = {"configuration": configuration, "report_layout_version": 19}
+    signature = hashlib.sha256(json.dumps(signature_payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
     report = run_dir / f"portfolio-report-{signature}.pdf"
     if not report.exists():
         uploads = list(run_dir.glob("holdings.*"))
@@ -614,7 +665,7 @@ def get_report(run_id: str, principal: Principal = Depends(get_principal)) -> Fi
             PortfolioAnalysisService().analyze(uploads[0], report, configuration)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Could not build customized report: {exc}") from exc
-    return FileResponse(report, media_type="application/pdf", filename=f"portfolio-analysis-{run_id[:8]}.pdf")
+    return FileResponse(report, media_type="application/pdf", filename=f"{report_number}.pdf")
 
 
 @app.post("/api/analyses/compare")

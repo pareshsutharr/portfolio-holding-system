@@ -424,7 +424,7 @@ def create_comparison_chart(
 
     width = 0.38
 
-    ax.barh(
+    benchmark_bars = ax.barh(
 
         y - width/2,
 
@@ -436,7 +436,7 @@ def create_comparison_chart(
 
     )
 
-    ax.barh(
+    client_bars = ax.barh(
 
         y + width/2,
 
@@ -447,6 +447,25 @@ def create_comparison_chart(
         label="Client Portfolio"
 
     )
+
+    ax.bar_label(
+        benchmark_bars,
+        labels=[f"{value:.1f}%" if value > 0 else "" for value in comparison["benchmark_weight"]],
+        padding=3,
+        fontsize=8,
+        fontweight="bold",
+    )
+
+    ax.bar_label(
+        client_bars,
+        labels=[f"{value:.1f}%" if value > 0 else "" for value in comparison["client_weight"]],
+        padding=3,
+        fontsize=8,
+        fontweight="bold",
+    )
+
+    maximum = max(float(comparison["benchmark_weight"].max()), float(comparison["client_weight"].max()), 1.0)
+    ax.set_xlim(0, maximum * 1.18)
 
     ax.set_yticks(y)
 

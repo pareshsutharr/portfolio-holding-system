@@ -26,14 +26,18 @@ fi
 cleanup() {
   [[ -n "${API_PID:-}" ]] && kill "$API_PID" 2>/dev/null || true
   [[ -n "${WEB_PID:-}" ]] && kill "$WEB_PID" 2>/dev/null || true
+  [[ -n "${SCHEDULER_PID:-}" ]] && kill "$SCHEDULER_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
 .venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 &
 API_PID=$!
 
-npm --prefix web run dev -- --port 3001 &
+npm run dev:web -- --port 3001 &
 WEB_PID=$!
+
+.venv/bin/python -m scripts.run_ingestion_scheduler &
+SCHEDULER_PID=$!
 
 echo "Portfolio Analyzer UI: http://localhost:3001"
 echo "Portfolio Analyzer API: http://localhost:8000/docs"

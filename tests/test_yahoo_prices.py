@@ -1,3 +1,5 @@
+from datetime import date
+
 import pandas as pd
 
 import yahoo_prices
@@ -28,10 +30,11 @@ def test_yahoo_cmp_recalculates_value_and_tracks_source(monkeypatch):
             },
         ]
     )
+    quote_date = date(2026, 9, 1)
     monkeypatch.setattr(
         yahoo_prices,
         "_download",
-        lambda tickers: {"EXAMPLE.NS": 101.25},
+        lambda tickers: {"EXAMPLE.NS": (101.25, quote_date)},
     )
 
     result = yahoo_prices.add_yahoo_current_prices(portfolio)
@@ -39,6 +42,8 @@ def test_yahoo_cmp_recalculates_value_and_tracks_source(monkeypatch):
     assert result.loc[0, "current_market_price"] == 101.25
     assert result.loc[0, "value"] == 1012.50
     assert result.loc[0, "price_source"] == "Yahoo Finance"
+    assert result.loc[0, "price_as_of"] == quote_date.isoformat()
     assert result.loc[1, "current_market_price"] == 40.0
     assert result.loc[1, "value"] == 200.0
     assert result.loc[1, "price_source"] == "Uploaded workbook"
+    assert pd.isna(result.loc[1, "price_as_of"])

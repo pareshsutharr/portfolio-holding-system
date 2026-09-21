@@ -31,10 +31,10 @@ from holdings_parser import parse_holdings
 from market_cap import add_market_cap
 from market_etl.config import Settings
 from market_etl.database import build_engine
-from market_etl.storage_assets import hydrate_style_assets
+from pdf_holdings_parser import parse_pdf_portfolio
 from pdf_reports import PortfolioPDF
 from portfolio_analysis import analyze_portfolio
-from portfolio_returns import analyze_portfolio_returns
+from portfolio_returns import analyze_disparity, analyze_portfolio_returns
 from riskometer import Riskometer
 from sector_industry import add_sector_industry
 from sector_mapping import apply_sector_mapping
@@ -73,7 +73,13 @@ class PortfolioAnalysisService:
         self.settings = settings or Settings.from_env()
         self.engine = build_engine(self.settings.database_url)
 
-    def preview(self, holdings_file: Path) -> dict[str, Any]:
+    def _parse_holdings_file(self, holdings_file: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
+        """Route to the PDF or Excel holdings parser by file extension, returning
+        the standardized holdings DataFrame plus source-specific metadata."""
+        if holdings_file.suffix.lower() == ".pdf":
+            parsed, unresolved_names = parse_pdf_portfolio(holdings_file)
+            return parsed, {"source": "pdf", "unresolved_names": unresolved_names}
+
         detected = detect_header(holdings_file)
         mapping = get_column_mapping(detected["headers"])
         parsed = parse_holdings(
@@ -82,27 +88,34 @@ class PortfolioAnalysisService:
             detected["headers"],
             mapping,
         )
-        return json_safe(
-            {
-                "header_row": detected["header_row"],
-                "headers": detected["headers"],
-                "mapping": mapping,
-                "holdings": parsed.head(12),
-                "holding_count": len(parsed),
-                "portfolio_value": parsed["value"].sum(),
-            }
-        )
+        return parsed, {
+            "source": "excel",
+            "header_row": detected["header_row"],
+            "headers": detected["headers"],
+            "mapping": mapping,
+        }
+
+    def preview(self, holdings_file: Path) -> dict[str, Any]:
+        parsed, meta = self._parse_holdings_file(holdings_file)
+        priced = add_yahoo_current_prices(add_market_cap(parsed))
+        payload = {
+            "holdings": priced.head(12),
+            "holding_count": len(priced),
+            "portfolio_value": priced["value"].sum(),
+        }
+        if meta["source"] == "excel":
+            payload.update(header_row=meta["header_row"], headers=meta["headers"], mapping=meta["mapping"])
+        else:
+            payload["unresolved_names"] = meta["unresolved_names"]
+        return json_safe(payload)
 
     def analyze(self, holdings_file: Path, output_pdf: Path, report_options: dict | None = None) -> dict[str, Any]:
-        hydrate_style_assets(self.engine)
-        detected = detect_header(holdings_file)
-        mapping = get_column_mapping(detected["headers"])
-        portfolio = parse_holdings(
-            detected["dataframe"],
-            detected["header_row"],
-            detected["headers"],
-            mapping,
-        )
+        portfolio, meta = self._parse_holdings_file(holdings_file)
+        if portfolio.empty:
+            raise ValueError(
+                "No valid holdings could be parsed from this file. Check that the "
+                "ISIN, Quantity, and Closing Value columns contain valid values."
+            )
         portfolio = add_sector_industry(portfolio)
         portfolio = apply_sector_mapping(portfolio)
         portfolio = add_market_cap(portfolio)
@@ -111,6 +124,7 @@ class PortfolioAnalysisService:
         risk = Riskometer(self.engine, Path("riskometer_config.json")).analyze(portfolio)
         style = StockStyleClassifier(Path(STYLE_CONFIG_FILE)).analyze(portfolio)
         returns = analyze_portfolio_returns(portfolio)
+        disparity = analyze_disparity(portfolio)
         analysis = analyze_all_benchmarks(analysis, load_all_benchmarks())
         chart_paths = generate_all_charts(analysis)
         chart_paths.update(generate_benchmark_charts(analysis))
@@ -120,7 +134,7 @@ class PortfolioAnalysisService:
             chart_paths=chart_paths,
             risk_analysis=risk,
             style_analysis=style,
-            returns_analysis=returns,
+            disparity_analysis=disparity,
             output_path=output_pdf,
             report_options=report_options,
         ).generate()
@@ -135,7 +149,8 @@ class PortfolioAnalysisService:
                 "risk": risk,
                 "style": style,
                 "returns": returns,
-                "mapping": mapping,
+                "mapping": meta.get("mapping"),
+                "unresolved_names": meta.get("unresolved_names", []),
                 "report_path": output_pdf,
             }
         )

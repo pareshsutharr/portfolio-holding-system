@@ -12,7 +12,6 @@ from reportlab.platypus import (
     Flowable,
     Image,
     KeepTogether,
-    PageBreak,
     Paragraph,
     Spacer,
     Table,
@@ -23,7 +22,7 @@ from charts import create_donut_chart
 
 NAVY = colors.HexColor("#0F172A")
 ACCENT = colors.HexColor("#1D4ED8")
-HEADING_RED = colors.HexColor("#D10A0A")
+HEADING_RED = colors.HexColor("#123A63")
 BORDER = colors.HexColor("#D9E2EC")
 MUTED = colors.HexColor("#64748B")
 
@@ -63,7 +62,7 @@ def _styles():
         ),
         "section": ParagraphStyle(
             "StyleSection", parent=base["Heading2"], fontName="Helvetica-Bold",
-            fontSize=13, leading=16, textColor=HEADING_RED, spaceAfter=6,
+            fontSize=13, leading=16, textColor=colors.HexColor("#0E8290"), spaceAfter=6,
         ),
         "body": ParagraphStyle(
             "StyleBody", parent=base["BodyText"], fontName="Helvetica",
@@ -166,7 +165,14 @@ def build_style_story(analysis, doc_width, output_dir):
     as_of = analysis["as_of_date"]
     as_of_text = as_of.strftime("%d %b %Y") if as_of is not None else "N/A"
 
+    left_width = doc_width * 0.35
+    right_width = doc_width * 0.62
+
     story = [
+        Paragraph(
+            "STYLE ANALYSIS",
+            ParagraphStyle("StyleKicker", parent=styles["small"], fontName="Helvetica-Bold", fontSize=7, textColor=colors.HexColor("#0E8290"), spaceAfter=2),
+        ),
         Paragraph("Stock Style Classification", styles["title"]),
         Paragraph(
             "Every holding is scored against Growth, Value, Momentum and Quality factors using "
@@ -180,17 +186,19 @@ def build_style_story(analysis, doc_width, output_dir):
             f"Fundamental data: latest Accord company filings. Price/momentum data as of {as_of_text}.",
             styles["small"],
         ),
-        Spacer(1, 10),
+        Spacer(1, 4),
     ]
 
-    story.append(Paragraph("Overall Portfolio Style Profile", styles["section"]))
-    story.append(Paragraph(
-        "How much of each style the portfolio exhibits overall &mdash; the portfolio-weighted average "
-        "score per style across every holding (regardless of which style each stock individually won). "
-        "Coverage is the share of portfolio value with usable data for that style.",
-        styles["small"],
-    ))
-    story.append(Spacer(1, 6))
+    # ----- Left column: portfolio style profile + style mix -----
+    left_column = [
+        Paragraph("Overall Portfolio Style Profile", styles["section"]),
+        Paragraph(
+            "Portfolio-weighted average score per style across every holding. Coverage is the "
+            "share of value with usable data.",
+            styles["small"],
+        ),
+        Spacer(1, 4),
+    ]
 
     profile = analysis["portfolio_style_profile"].copy()
     profile_rows = [[
@@ -207,24 +215,27 @@ def build_style_story(analysis, doc_width, output_dir):
             _style_bar(row["weighted_score"], row["style"]),
             _cell(f"{row['coverage_percent']:.1f}%", styles["table_right"]),
         ])
-    story.append(_styled_table(
-        profile_rows, [130, 60, 90, 80], {0: "LEFT", 1: "RIGHT", 2: "CENTER", 3: "RIGHT"},
+    left_column.append(_styled_table(
+        profile_rows,
+        [left_width * 0.36, left_width * 0.16, left_width * 0.28, left_width * 0.20],
+        {0: "LEFT", 1: "RIGHT", 2: "CENTER", 3: "RIGHT"},
+        font_size=6.6,
+        extra_commands=[
+            ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+        ],
     ))
-    story.append(Spacer(1, 14))
+    left_column.append(Spacer(1, 6))
 
     donut_path = output_dir / "style_mix_donut.png"
     create_donut_chart(
         style_mix, "style_label", "allocation_percent",
         "Portfolio Style Mix", donut_path.name, "Primary Style\nAllocation",
     )
-    story.append(Paragraph("Portfolio Style Mix", styles["section"]))
-    story.append(Image(str(donut_path), width=6.4 * 72, height=4.6 * 72))
-    story.append(Spacer(1, 6))
-
     mix_rows = [[
         _cell("Style", styles["table_header_left"]),
-        _cell("Number of Holdings", styles["table_header_right"]),
-        _cell("Portfolio Weight %", styles["table_header_right"]),
+        _cell("Holdings", styles["table_header_right"]),
+        _cell("Weight %", styles["table_header_right"]),
     ]]
     for _, row in style_mix.iterrows():
         mix_rows.append([
@@ -232,63 +243,34 @@ def build_style_story(analysis, doc_width, output_dir):
             _cell(int(row["holdings_count"]), styles["table_right"]),
             _cell(f"{row['allocation_percent']:.2f}%", styles["table_right"]),
         ])
-    story.append(_styled_table(
-        mix_rows, [doc_width - 240, 120, 120], {0: "LEFT", 1: "RIGHT", 2: "RIGHT"},
-    ))
-    story.append(PageBreak())
+    compact_mix_table = _styled_table(
+        mix_rows,
+        [left_width * 0.42, left_width * 0.28, left_width * 0.28],
+        {0: "LEFT", 1: "RIGHT", 2: "RIGHT"},
+        font_size=6.6,
+        extra_commands=[
+            ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+        ],
+    )
+    left_column.append(Paragraph("Portfolio Style Mix", styles["section"]))
+    left_column.append(Image(str(donut_path), width=left_width * 0.58, height=left_width * 0.58 * 0.58))
+    left_column.append(Spacer(1, 3))
+    left_column.append(compact_mix_table)
 
-    story.append(Paragraph("Holding-wise Style Classification", styles["section"]))
-    story.append(Paragraph(
-        "Primary/Secondary Style is the highest/second-highest eligible style score. "
-        "Rating reflects the Primary Style score against the Final Rating Bands.",
-        styles["small"],
-    ))
-    story.append(Spacer(1, 8))
-
-    detail_rows = [[
-        _cell("Company", styles["table_header_left"]),
-        _cell("ISIN", styles["table_header_center"]),
-        _cell("Wt %", styles["table_header_right"]),
-        _cell("Cap", styles["table_header_center"]),
-        _cell("Primary Style", styles["table_header_center"]),
-        _cell("Score", styles["table_header_right"]),
-        _cell("Secondary Style", styles["table_header_center"]),
-        _cell("Rating", styles["table_header_center"]),
-    ]]
-    for _, row in holdings.iterrows():
-        primary_label = style_labels.get(row["primary_style"], "Unclassified")
-        secondary_label = style_labels.get(row["secondary_style"], "-")
-        score_text = f"{row['primary_score']:.1f}" if row["primary_score"] == row["primary_score"] else "N/A"
-        detail_rows.append([
-            _cell(row["company_name"], styles["table_text"]),
-            _cell(row["isin"], styles["table_center"]),
-            _cell(f"{row['weight'] * 100:.2f}%", styles["table_right"]),
-            _cell(row["market_cap_size"], styles["table_center"]),
-            _cell(primary_label, styles["table_center"]),
-            _cell(score_text, styles["table_right"]),
-            _cell(secondary_label, styles["table_center"]),
-            _cell(row["rating"], styles["table_center"]),
-        ])
-
-    col_widths = [110, 68, 38, 42, 66, 34, 66, 62]
-    story.append(_styled_table(
-        detail_rows, col_widths,
-        {0: "LEFT", 1: "CENTER", 2: "RIGHT", 3: "CENTER", 4: "CENTER", 5: "RIGHT", 6: "CENTER", 7: "CENTER"},
-    ))
-    story.append(PageBreak())
-
-    story.append(Paragraph("Style Score Matrix", styles["section"]))
-    story.append(Paragraph(
-        f"Every holding's score (0-100) against all {len(analysis['style_keys'])} styles. A plain "
-        "score means the stock is eligible for that style (cleared its minimum-metrics-passed "
-        "rule). A score in parentheses means it was scored on complete data but did not qualify. "
-        "A score marked with * means it is ineligible only because too few metrics could be "
-        "computed for it -- most commonly a recently listed company that doesn't yet have the "
-        "full history a style like Growth requires -- and should not be read as a genuine "
-        "failing score. The highlighted cell is each holding's Primary Style.",
-        styles["small"],
-    ))
-    story.append(Spacer(1, 8))
+    # ----- Right column: per-holding style score matrix -----
+    right_column = [
+        Paragraph("Style Score Matrix", styles["section"]),
+        Paragraph(
+            f"Every holding's score (0-100) against all {len(analysis['style_keys'])} styles. A plain "
+            "score is eligible (cleared the minimum-metrics-passed rule); a score in parentheses was "
+            "scored but didn't qualify; a score marked * is ineligible only because too few metrics "
+            "could be computed (e.g. a recent listing), not a genuine failing score. The highlighted "
+            "cell is each holding's Primary Style.",
+            styles["small"],
+        ),
+        Spacer(1, 4),
+    ]
 
     matrix_header = [_cell("Company", styles["table_header_left"])] + [
         _cell(style_labels[key], styles["table_header_center"]) for key in analysis["style_keys"]
@@ -324,52 +306,40 @@ def build_style_story(analysis, doc_width, output_dir):
         matrix_rows.append(cells)
 
     style_count = len(analysis["style_keys"])
-    matrix_col_widths = [doc_width - 60 * style_count] + [60] * style_count
-    story.append(_styled_table(
+    matrix_col_widths = [right_width - 46 * style_count] + [46] * style_count
+    right_column.append(_styled_table(
         matrix_rows, matrix_col_widths,
         {0: "LEFT", **{i: "CENTER" for i in range(1, style_count + 1)}},
-        extra_commands=highlight_commands,
+        font_size=6.2,
+        extra_commands=highlight_commands + [
+            ("TOPPADDING", (0, 0), (-1, -1), 2.0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2.0),
+        ],
     ))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(
-        "N/A means no metric for that style could be computed at all for that stock (e.g. no "
-        "price history at all). * means the style couldn't be fully evaluated -- not enough "
-        "metrics had data -- rather than the stock genuinely underperforming.",
-        styles["small"],
-    ))
-    story.append(PageBreak())
-
-    story.append(Paragraph("Style Definitions", styles["section"]))
-    definition_rows = [[
-        _cell("Style", styles["table_header_left"]),
-        _cell("Definition", styles["table_header_left"]),
-        _cell("Eligibility Rule", styles["table_header_left"]),
-    ]]
-    for key in analysis["style_keys"]:
-        style_cfg = config["styles"][key]
-        total_metrics = len(style_cfg["metrics"])
-        definition_rows.append([
-            _cell(style_cfg["label"], styles["table_text"]),
-            _cell(style_cfg["definition"], styles["table_text"]),
-            _cell(f"Pass at least {style_cfg['min_pass']} of {total_metrics} metrics", styles["table_text"]),
-        ])
-    story.append(_styled_table(
-        definition_rows, [90, doc_width - 90 - 160, 160],
-        {0: "LEFT", 1: "LEFT", 2: "LEFT"}, repeat_rows=1,
-    ))
-
-    story.append(Spacer(1, 8))
-    if "growth" in analysis["style_keys"]:
-        story.append(Paragraph(
-            "Growth requires a full 5-year history for every metric. A company listed less than "
-            "5 years ago will show N/A for Growth in the Style Score Matrix -- this reflects "
-            "insufficient listing history, not a failing Growth score.",
-            styles["small"],
-        ))
-    story.append(Paragraph(
-        "Methodology note: thresholds and weights are configurable in style_config.json. "
-        "This classification is an analytical indicator, not investment advice.",
+    right_column.append(Spacer(1, 3))
+    right_column.append(Paragraph(
+        "N/A means no metric for that style could be computed at all for that stock. * means the "
+        "style couldn't be fully evaluated -- not enough metrics had data -- rather than the stock "
+        "genuinely underperforming. Methodology note: thresholds and weights are configurable in "
+        "style_config.json. This classification is an analytical indicator, not investment advice.",
         styles["small"],
     ))
 
-    return story
+    columns = Table(
+        [[left_column, right_column]],
+        colWidths=[left_width, right_width],
+        hAlign="LEFT",
+    )
+    columns.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("RIGHTPADDING", (0, 0), (0, 0), 14),
+        ("LEFTPADDING", (1, 0), (1, 0), 14),
+        ("RIGHTPADDING", (1, 0), (1, 0), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("LINEBEFORE", (1, 0), (1, 0), 0.5, BORDER),
+    ]))
+    story.append(columns)
+
+    return [KeepTogether(story)]

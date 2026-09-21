@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { authFetch, downloadAuthorized } from "@/lib/auth";
+import { authFetch } from "@/lib/auth";
+import { ReportDownloadDialog } from "@/components/report-download-dialog";
 import { Riskometer } from "@/components/riskometer";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
@@ -35,6 +36,7 @@ export function AnalysisView({ id }: { id: string }) {
   const [result, setResult] = useState<Result | null>(null);
   const [reportConfig, setReportConfig] = useState<{ title: string; subtitle: string; sections: Record<string, boolean> } | null>(null);
   const [error, setError] = useState("");
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
   useEffect(() => {
     authFetch(`${API_URL}/api/analyses/${id}`)
       .then(async (response) => {
@@ -55,7 +57,7 @@ export function AnalysisView({ id }: { id: string }) {
       <header className="analysis-topbar">
         <Link href="/dashboard-v2"><ArrowLeft size={17}/> Portfolio overview</Link>
         <span><CheckCircle2 size={15}/> Analysis complete</span>
-        <button className="primary-button" onClick={() => downloadAuthorized(`/api/analyses/${id}/report`, `portfolio-${id.slice(0, 8)}.pdf`)}><Download size={16}/> Download report</button>
+        <button className="primary-button" onClick={() => setReportDialogOpen(true)}><Download size={16}/> Choose &amp; download report</button>
       </header>
       <div className="analysis-content">
         <div className="analysis-title"><div><p className="eyebrow">PORTFOLIO ANALYSIS · {id.slice(0, 8).toUpperCase()}</p><h1>{reportConfig?.title || "Investment health report"}</h1><p>{reportConfig?.subtitle || "Structure, risk, style, performance, and benchmark intelligence."}</p></div></div>
@@ -84,6 +86,7 @@ export function AnalysisView({ id }: { id: string }) {
           <div className="table-scroll"><table><thead><tr><th>Security</th><th>ISIN</th><th>Sector</th><th>Market cap</th><th>Value</th><th>Weight</th></tr></thead><tbody>{result.portfolio.map((holding) => <tr key={String(holding.isin)}><td><strong>{holding.security_name}</strong></td><td>{holding.isin}</td><td>{holding.sector}</td><td><span className="table-badge">{holding.cap_category}</span></td><td>₹{Number(holding.value).toLocaleString("en-IN")}</td><td>{holding.weight_percent}%</td></tr>)}</tbody></table></div>
         </article>}
       </div>
+      <ReportDownloadDialog runId={id} open={reportDialogOpen} onOpenChange={setReportDialogOpen} />
     </main>
   );
 }
