@@ -11,7 +11,7 @@ dependencies = [
     "numpy",
     "openpyxl",
     "pandas",
-    "playwright>=1.54,<2.0",
+    "pdfplumber",
     "psycopg[binary]>=3.2,<4.0",
     "python-dotenv>=1.0,<2.0",
     "python-multipart>=0.0.20,<1.0",

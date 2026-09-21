@@ -76,3 +76,4 @@ needed on a new machine, install its local browser once with
 The former frontend checkout under `web/` is no longer part of the build. The
 canonical application source is now `src/` at the repository root.
 # portfolio-analyzer
+# portfolio-analyzer
